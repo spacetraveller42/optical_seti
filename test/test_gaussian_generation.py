@@ -98,3 +98,25 @@ print("Plot saved as 'test_multiple_gaussians.png'")
 plt.show()
 
 print("\nAll tests completed successfully!")
+
+# Test 5: Input validation
+print("\nTest 5: Verify input validation")
+try:
+    optical_seti_functions.generate_gaussian(-5.0, 100.0, 50.0, 100)
+    print("ERROR: Should have raised ValueError for negative FWHM")
+except ValueError as e:
+    print(f"✓ Correctly rejected negative FWHM: {e}")
+
+try:
+    optical_seti_functions.generate_gaussian(10.0, 100.0, 50.0, -10)
+    print("ERROR: Should have raised ValueError for negative array_length")
+except ValueError as e:
+    print(f"✓ Correctly rejected negative array_length: {e}")
+
+try:
+    optical_seti_functions.generate_gaussian(10.0, 100.0, 150.0, 100)
+    print("ERROR: Should have raised ValueError for out-of-bounds center")
+except ValueError as e:
+    print(f"✓ Correctly rejected out-of-bounds center: {e}")
+
+print("\nAll tests including validation completed successfully!")

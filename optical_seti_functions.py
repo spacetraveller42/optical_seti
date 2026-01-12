@@ -223,6 +223,10 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 
 # ##### 5. GAUSSIAN GENERATION
 
+# Conversion factor from FWHM to standard deviation for a Gaussian
+# FWHM = 2 * sqrt(2 * ln(2)) * sigma ≈ 2.35482 * sigma
+FWHM_TO_SIGMA_FACTOR = 2 * np.sqrt(2 * np.log(2))
+
 # Generate a Gaussian curve with specified Full Width Half Maximum (FWHM).
 # The Gaussian is generated on an x-axis that spans indices 0 to array_length-1.
 #
@@ -234,8 +238,16 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 # Output:
 #   gaussian_array: numpy array containing the Gaussian curve
 def generate_gaussian(fwhm, amplitude, center, array_length):
-    # Convert FWHM to standard deviation: FWHM = 2.35 * sigma
-    sigma = fwhm / 2.35
+    # Input validation
+    if fwhm <= 0:
+        raise ValueError(f"FWHM must be positive, got {fwhm}")
+    if array_length <= 0:
+        raise ValueError(f"array_length must be positive, got {array_length}")
+    if center < 0 or center >= array_length:
+        raise ValueError(f"center must be within [0, {array_length}), got {center}")
+    
+    # Convert FWHM to standard deviation: FWHM = 2 * sqrt(2 * ln(2)) * sigma
+    sigma = fwhm / FWHM_TO_SIGMA_FACTOR
     
     # Create x-axis array
     x = np.arange(array_length)
