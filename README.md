@@ -38,6 +38,18 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
   
         fwhm = gaussian_curve_fit("filename.fits",hits_start,hits_end)
 
+- `generate_gaussian()`
+  
+  Generate a Gaussian curve with specified Full Width Half Maximum (FWHM). This is useful for creating synthetic test data or adding artificial signals to spectra.
+  
+        gaussian_array = generate_gaussian(fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
+
+- `add_gaussian_to_array()`
+  
+  Add a Gaussian curve to an existing data array. This function combines `generate_gaussian()` with array addition for convenience.
+  
+        data_with_gaussian = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0)
+
 ### `seti_catalog_functions.py`
 These functions operate on entire catalogs of stars (CSV/TSV text files).
 

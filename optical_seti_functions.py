@@ -220,3 +220,42 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     #GJ551 HITS_STARTS: 13812, 39670 (something's odd), 43403, 45101, 59377, 64514, 67948, 76729, 80165
     plt.show()
     return fwhm
+
+# ##### 5. GAUSSIAN GENERATION
+
+# Generate a Gaussian curve with specified Full Width Half Maximum (FWHM).
+# The Gaussian is generated on an x-axis that spans indices 0 to array_length-1.
+#
+# Inputs:
+#   fwhm: Full Width Half Maximum of the Gaussian (in array index units)
+#   amplitude: Peak amplitude of the Gaussian
+#   center: Center position of the Gaussian (in array index units)
+#   array_length: Length of the output array
+# Output:
+#   gaussian_array: numpy array containing the Gaussian curve
+def generate_gaussian(fwhm, amplitude, center, array_length):
+    # Convert FWHM to standard deviation: FWHM = 2.35 * sigma
+    sigma = fwhm / 2.35
+    
+    # Create x-axis array
+    x = np.arange(array_length)
+    
+    # Generate Gaussian: amplitude * exp(-(x-center)^2 / (2*sigma^2))
+    gaussian_array = amplitude * np.exp(-((x - center) ** 2) / (2 * sigma ** 2))
+    
+    return gaussian_array
+
+# Add a Gaussian curve to an existing array.
+# This function generates a Gaussian with the specified FWHM and adds it to the input array.
+#
+# Inputs:
+#   data: numpy array to which the Gaussian will be added
+#   fwhm: Full Width Half Maximum of the Gaussian (in array index units)
+#   amplitude: Peak amplitude of the Gaussian
+#   center: Center position of the Gaussian (in array index units)
+# Output:
+#   result: numpy array with the Gaussian added to the input data
+def add_gaussian_to_array(data, fwhm, amplitude, center):
+    gaussian = generate_gaussian(fwhm, amplitude, center, len(data))
+    result = data + gaussian
+    return result
