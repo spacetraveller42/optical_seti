@@ -31,6 +31,10 @@ from specutils.fitting import fit_lines
 from pathlib import Path
 eso_cache_path = Path(astropy.config.get_cache_dir()) / "astroquery" / "Eso"
 
+# Conversion factor from FWHM to standard deviation for a Gaussian
+# FWHM = 2 * sqrt(2 * ln(2)) * sigma ≈ 2.35482 * sigma
+FWHM_TO_SIGMA_FACTOR = 2 * np.sqrt(2 * np.log(2))
+
 # ##### 1.  STATISTICS FUNCTIONS
 
 # Calculate running median of data, using window size.
@@ -211,7 +215,7 @@ def gaussian_curve_fit(file,hits_start,hits_end):
         alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
         g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
         standard_deviation= g_fit.stddev.value
-    fwhm = standard_deviation * 2.35
+    fwhm = standard_deviation * FWHM_TO_SIGMA_FACTOR
     y_fit = g_fit(wave[windowpoint1:windowpoint2]*u.AA)
     plt.plot(spectrum.spectral_axis, spectrum.flux) 
     plt.plot(wave[windowpoint1:windowpoint2], y_fit)
@@ -222,10 +226,6 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     return fwhm
 
 # ##### 5. GAUSSIAN GENERATION
-
-# Conversion factor from FWHM to standard deviation for a Gaussian
-# FWHM = 2 * sqrt(2 * ln(2)) * sigma ≈ 2.35482 * sigma
-FWHM_TO_SIGMA_FACTOR = 2 * np.sqrt(2 * np.log(2))
 
 # Generate a Gaussian curve with specified Full Width Half Maximum (FWHM).
 # The Gaussian is generated on an x-axis that spans indices 0 to array_length-1.
