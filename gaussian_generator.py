@@ -105,18 +105,19 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
     return gaussian_array
 
 
-def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None):
+def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis=-1):
     """
-    Add a Gaussian curve to an existing array.
+    Add a Gaussian curve to an existing array with broadcasting support.
     
     This function generates a Gaussian with the specified FWHM and adds it
-    to the input array. The Gaussian can have a different length than the data
-    array - if shorter, it will be zero-padded; if longer, it will be truncated.
+    to the input array. Supports multi-dimensional arrays via broadcasting.
+    The Gaussian can have a different length than the data array - if shorter,
+    it will be zero-padded; if longer, it will be truncated.
     
     Parameters
     ----------
     data : numpy.ndarray
-        Numpy array to which the Gaussian will be added.
+        Numpy array to which the Gaussian will be added (1D, 2D, or higher).
     fwhm : float
         Full Width Half Maximum of the Gaussian (in array index units).
         Must be positive.
@@ -125,8 +126,11 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None):
     center : float
         Center position of the Gaussian (in array index units).
     array_length : int, optional
-        Length of Gaussian to generate. If None (default), uses len(data).
+        Length of Gaussian to generate. If None (default), uses data length along axis.
         If different from data length, Gaussian will be zero-padded or truncated.
+    axis : int, optional
+        Axis along which to add the Gaussian for multi-dimensional arrays.
+        Default is -1 (last axis). Ignored for 1D arrays.
     
     Returns
     -------
@@ -140,38 +144,76 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None):
     
     Examples
     --------
-    >>> # Same length (default behavior)
+    >>> # 1D array (default behavior)
     >>> data = np.ones(100) * 500
     >>> result = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0)
     >>> print(np.max(result))
     600.0
     
-    >>> # Add Gaussian of different length (will be zero-padded/truncated)
-    >>> data = np.ones(200) * 500
-    >>> result = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
+    >>> # 2D array - add Gaussian along axis 1 (broadcasting across axis 0)
+    >>> data_2d = np.ones((50, 100)) * 500
+    >>> result_2d = add_gaussian_to_array(data_2d, fwhm=10.0, amplitude=100.0, center=50.0, axis=1)
+    >>> print(result_2d.shape)
+    (50, 100)
+    
+    >>> # 2D array - add Gaussian along axis 0
+    >>> result_2d = add_gaussian_to_array(data_2d, fwhm=5.0, amplitude=80.0, center=25.0, axis=0)
     """
-    # If array_length not specified, match the data length
-    if array_length is None:
-        array_length = len(data)
+    data = np.asarray(data)
     
-    # Generate Gaussian with specified length
-    gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
-    
-    # Handle different lengths
-    data_len = len(data)
-    gauss_len = len(gaussian)
-    
-    if gauss_len == data_len:
-        # Same length - direct addition
+    # Handle multi-dimensional arrays
+    if data.ndim > 1:
+        # Get length along specified axis
+        if array_length is None:
+            array_length = data.shape[axis]
+        
+        # Generate Gaussian with specified length
+        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        
+        # Handle different lengths along the axis
+        data_len = data.shape[axis]
+        gauss_len = len(gaussian)
+        
+        if gauss_len < data_len:
+            # Gaussian is shorter - zero-pad it
+            pad_gaussian = np.zeros(data_len)
+            pad_gaussian[:gauss_len] = gaussian
+            gaussian = pad_gaussian
+        elif gauss_len > data_len:
+            # Gaussian is longer - truncate it
+            gaussian = gaussian[:data_len]
+        
+        # Reshape Gaussian for broadcasting
+        # Create shape with 1s except at the specified axis
+        broadcast_shape = [1] * data.ndim
+        broadcast_shape[axis] = len(gaussian)
+        gaussian = gaussian.reshape(broadcast_shape)
+        
+        # Add via broadcasting
         result = data + gaussian
-    elif gauss_len < data_len:
-        # Gaussian is shorter - zero-pad it
-        padded_gaussian = np.zeros(data_len)
-        padded_gaussian[:gauss_len] = gaussian
-        result = data + padded_gaussian
     else:
-        # Gaussian is longer - truncate it
-        result = data + gaussian[:data_len]
+        # 1D array handling (original behavior)
+        if array_length is None:
+            array_length = len(data)
+        
+        # Generate Gaussian with specified length
+        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        
+        # Handle different lengths
+        data_len = len(data)
+        gauss_len = len(gaussian)
+        
+        if gauss_len == data_len:
+            # Same length - direct addition
+            result = data + gaussian
+        elif gauss_len < data_len:
+            # Gaussian is shorter - zero-pad it
+            padded_gaussian = np.zeros(data_len)
+            padded_gaussian[:gauss_len] = gaussian
+            result = data + padded_gaussian
+        else:
+            # Gaussian is longer - truncate it
+            result = data + gaussian[:data_len]
     
     return result
 

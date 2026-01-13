@@ -46,13 +46,17 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
 
 - `add_gaussian_to_array()`
   
-  Add a Gaussian curve to an existing data array. The Gaussian can have a different length than the data array (will be zero-padded or truncated as needed).
+  Add a Gaussian curve to an existing data array with broadcasting support for multi-dimensional arrays. The Gaussian can have a different length than the data array (will be zero-padded or truncated as needed).
   
-        # Default: Gaussian matches data length
+        # 1D array (default behavior)
         data_with_gaussian = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0)
         
-        # Specify different Gaussian length (shorter Gaussians are zero-padded, longer ones truncated)
+        # Different Gaussian length (shorter Gaussians are zero-padded, longer ones truncated)
         data_with_gaussian = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0, array_length=150)
+        
+        # 2D array - add Gaussian along specific axis (broadcasting)
+        data_2d = np.ones((50, 100)) * 500
+        result_2d = add_gaussian_to_array(data_2d, fwhm=10.0, amplitude=100.0, center=50.0, axis=1)  # broadcasts across rows
 
 ### `seti_catalog_functions.py`
 These functions operate on entire catalogs of stars (CSV/TSV text files).

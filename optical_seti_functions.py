@@ -259,39 +259,74 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
 
 # Add a Gaussian curve to an existing array.
 # This function generates a Gaussian with the specified FWHM and adds it to the input array.
-# If array_length is not specified, the Gaussian will match the data array length.
+# Supports broadcasting for multi-dimensional arrays.
+# If array_length is not specified, the Gaussian will match the data array length along axis.
 # If array_length differs from data length, the Gaussian will be truncated or zero-padded as needed.
 #
 # Inputs:
-#   data: numpy array to which the Gaussian will be added
+#   data: numpy array to which the Gaussian will be added (1D, 2D, or higher)
 #   fwhm: Full Width Half Maximum of the Gaussian (in array index units)
 #   amplitude: Peak amplitude of the Gaussian
 #   center: Center position of the Gaussian (in array index units)
-#   array_length: (optional) Length of Gaussian to generate. If None, uses len(data).
+#   array_length: (optional) Length of Gaussian to generate. If None, uses data length along axis.
+#   axis: (optional) Axis along which to add the Gaussian for multi-dimensional arrays. Default is -1 (last axis).
 # Output:
 #   result: numpy array with the Gaussian added to the input data
-def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None):
-    # If array_length not specified, match the data length
-    if array_length is None:
-        array_length = len(data)
+def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis=-1):
+    data = np.asarray(data)
     
-    # Generate Gaussian with specified length
-    gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
-    
-    # Handle different lengths
-    data_len = len(data)
-    gauss_len = len(gaussian)
-    
-    if gauss_len == data_len:
-        # Same length - direct addition
+    # Handle multi-dimensional arrays
+    if data.ndim > 1:
+        # Get length along specified axis
+        if array_length is None:
+            array_length = data.shape[axis]
+        
+        # Generate Gaussian with specified length
+        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        
+        # Handle different lengths along the axis
+        data_len = data.shape[axis]
+        gauss_len = len(gaussian)
+        
+        if gauss_len < data_len:
+            # Gaussian is shorter - zero-pad it
+            pad_gaussian = np.zeros(data_len)
+            pad_gaussian[:gauss_len] = gaussian
+            gaussian = pad_gaussian
+        elif gauss_len > data_len:
+            # Gaussian is longer - truncate it
+            gaussian = gaussian[:data_len]
+        
+        # Reshape Gaussian for broadcasting
+        # Create shape with 1s except at the specified axis
+        broadcast_shape = [1] * data.ndim
+        broadcast_shape[axis] = len(gaussian)
+        gaussian = gaussian.reshape(broadcast_shape)
+        
+        # Add via broadcasting
         result = data + gaussian
-    elif gauss_len < data_len:
-        # Gaussian is shorter - zero-pad it
-        padded_gaussian = np.zeros(data_len)
-        padded_gaussian[:gauss_len] = gaussian
-        result = data + padded_gaussian
     else:
-        # Gaussian is longer - truncate it
-        result = data + gaussian[:data_len]
+        # 1D array handling (original behavior)
+        if array_length is None:
+            array_length = len(data)
+        
+        # Generate Gaussian with specified length
+        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        
+        # Handle different lengths
+        data_len = len(data)
+        gauss_len = len(gaussian)
+        
+        if gauss_len == data_len:
+            # Same length - direct addition
+            result = data + gaussian
+        elif gauss_len < data_len:
+            # Gaussian is shorter - zero-pad it
+            padded_gaussian = np.zeros(data_len)
+            padded_gaussian[:gauss_len] = gaussian
+            result = data + padded_gaussian
+        else:
+            # Gaussian is longer - truncate it
+            result = data + gaussian[:data_len]
     
     return result
