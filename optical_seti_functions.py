@@ -259,15 +259,39 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
 
 # Add a Gaussian curve to an existing array.
 # This function generates a Gaussian with the specified FWHM and adds it to the input array.
+# If array_length is not specified, the Gaussian will match the data array length.
+# If array_length differs from data length, the Gaussian will be truncated or zero-padded as needed.
 #
 # Inputs:
 #   data: numpy array to which the Gaussian will be added
 #   fwhm: Full Width Half Maximum of the Gaussian (in array index units)
 #   amplitude: Peak amplitude of the Gaussian
 #   center: Center position of the Gaussian (in array index units)
+#   array_length: (optional) Length of Gaussian to generate. If None, uses len(data).
 # Output:
 #   result: numpy array with the Gaussian added to the input data
-def add_gaussian_to_array(data, fwhm, amplitude, center):
-    gaussian = generate_gaussian(fwhm, amplitude, center, len(data))
-    result = data + gaussian
+def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None):
+    # If array_length not specified, match the data length
+    if array_length is None:
+        array_length = len(data)
+    
+    # Generate Gaussian with specified length
+    gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+    
+    # Handle different lengths
+    data_len = len(data)
+    gauss_len = len(gaussian)
+    
+    if gauss_len == data_len:
+        # Same length - direct addition
+        result = data + gaussian
+    elif gauss_len < data_len:
+        # Gaussian is shorter - zero-pad it
+        padded_gaussian = np.zeros(data_len)
+        padded_gaussian[:gauss_len] = gaussian
+        result = data + padded_gaussian
+    else:
+        # Gaussian is longer - truncate it
+        result = data + gaussian[:data_len]
+    
     return result
