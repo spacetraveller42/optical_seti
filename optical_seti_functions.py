@@ -275,11 +275,31 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
 def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis=-1):
     data = np.asarray(data)
     
+    # Validate input data
+    if data.size == 0:
+        raise ValueError("Input data array is empty")
+    
     # Handle multi-dimensional arrays
     if data.ndim > 1:
+        # Normalize axis to positive index
+        if axis < 0:
+            axis = data.ndim + axis
+        
+        # Validate axis
+        if axis < 0 or axis >= data.ndim:
+            raise ValueError(f"axis {axis} is out of bounds for array of dimension {data.ndim}")
+        
         # Get length along specified axis
         if array_length is None:
             array_length = data.shape[axis]
+        
+        # Validate array_length
+        if array_length <= 0:
+            raise ValueError(f"array_length must be positive, got {array_length}")
+        
+        # Validate center is within bounds
+        if center < 0 or center >= array_length:
+            raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
         gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
@@ -309,6 +329,14 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
         # 1D array handling (original behavior)
         if array_length is None:
             array_length = len(data)
+        
+        # Validate array_length
+        if array_length <= 0:
+            raise ValueError(f"array_length must be positive, got {array_length}")
+        
+        # Validate center is within bounds
+        if center < 0 or center >= array_length:
+            raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
         gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
