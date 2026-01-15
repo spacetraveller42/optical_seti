@@ -194,7 +194,9 @@ def spike_plotter(file, window_size = 101, threshold_multiplier = 3.5, center_in
 #   file: file name to fit
 #   hits_start: starting index of best-guess peak location
 #   hits_end: ending index of best-guess peak location
-def gaussian_curve_fit(file,hits_start,hits_end):
+#   use_area: if True, specify Gaussian by area under curve instead of amplitude (default: False)
+#   area_value: if use_area is True, this is the area under the curve to use for the initial guess
+def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None):
     wave,arr1 = read_harps_file(file)
     windowpoint1 = hits_start - 100
     windowpoint2 = hits_end + 100
@@ -203,12 +205,23 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     mean_guess = np.mean(wave[hits_start:hits_end])
     st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
     st_deviation_guess_narrow = (wave[hits_end] - wave[hits_start]) * 2
+    
+    # If use_area is True, calculate amplitude from area
+    # For a Gaussian: area = amplitude * stddev * sqrt(2*pi)
+    # Therefore: amplitude = area / (stddev * sqrt(2*pi))
+    if use_area and area_value is not None:
+        amplitude_guess_wide = area_value / (st_deviation_guess_wide * np.sqrt(2 * np.pi))
+        amplitude_guess_narrow = area_value / (st_deviation_guess_narrow * np.sqrt(2 * np.pi))
+    else:
+        amplitude_guess_wide = peak_guess
+        amplitude_guess_narrow = peak_guess
+    
     spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
-    g_init = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_wide*u.AA)
+    g_init = models.Gaussian1D(amplitude=amplitude_guess_wide*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_wide*u.AA)
     g_fit = fit_lines(spectrum, g_init, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
     standard_deviation = g_fit.stddev.value
     if standard_deviation < 1e-12: # Didn't find peak, try a narrower guess
-        alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
+        alternate_guess = models.Gaussian1D(amplitude=amplitude_guess_narrow*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
         g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
         standard_deviation= g_fit.stddev.value
     fwhm = standard_deviation * 2.35
