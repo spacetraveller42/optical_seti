@@ -237,7 +237,7 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 #   array_length: Length of the output array
 # Output:
 #   gaussian_array: numpy array containing the Gaussian curve
-def generate_gaussian(fwhm, amplitude, center, array_length):
+def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area=None):
     # Input validation
     if fwhm <= 0:
         raise ValueError(f"FWHM must be positive, got {fwhm}")
@@ -246,8 +246,22 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
     if center < 0 or center >= array_length:
         raise ValueError(f"center must be within [0, {array_length}), got {center}")
     
+    # Check that either amplitude or area is specified, but not both
+    if amplitude is None and area is None:
+        raise ValueError("Either 'amplitude' or 'area' must be specified")
+    if amplitude is not None and area is not None:
+        raise ValueError("Cannot specify both 'amplitude' and 'area' - choose one")
+    
     # Convert FWHM to standard deviation: FWHM = 2 * sqrt(2 * ln(2)) * sigma
     sigma = fwhm / FWHM_TO_SIGMA_FACTOR
+    
+    # If area is specified, calculate the required amplitude
+    # For a Gaussian: Area = amplitude * sigma * sqrt(2*pi)
+    # Therefore: amplitude = Area / (sigma * sqrt(2*pi))
+    if area is not None:
+        if area <= 0:
+            raise ValueError(f"area must be positive, got {area}")
+        amplitude = area / (sigma * np.sqrt(2 * np.pi))
     
     # Create x-axis array
     x = np.arange(array_length)
@@ -266,13 +280,14 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
 # Inputs:
 #   data: numpy array to which the Gaussian will be added (1D, 2D, or higher)
 #   fwhm: Full Width Half Maximum of the Gaussian (in array index units)
-#   amplitude: Peak amplitude of the Gaussian
+#   amplitude: (optional) Peak amplitude of the Gaussian. Specify either amplitude or area, not both.
 #   center: Center position of the Gaussian (in array index units)
 #   array_length: (optional) Length of Gaussian to generate. If None, uses data length along axis.
 #   axis: (optional) Axis along which to add the Gaussian for multi-dimensional arrays. Default is -1 (last axis).
+#   area: (optional) Area under the Gaussian curve. Specify either amplitude or area, not both.
 # Output:
 #   result: numpy array with the Gaussian added to the input data
-def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis=-1):
+def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=None, axis=-1, area=None):
     data = np.asarray(data)
     
     # Validate input data
@@ -302,7 +317,7 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
-        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
         
         # Handle different lengths along the axis
         data_len = data.shape[axis]
@@ -339,7 +354,7 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
-        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
         
         # Handle different lengths
         data_len = len(data)

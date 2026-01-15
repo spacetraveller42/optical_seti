@@ -40,16 +40,23 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
 
 - `generate_gaussian()`
   
-  Generate a Gaussian curve with specified Full Width Half Maximum (FWHM). This is useful for creating synthetic test data or adding artificial signals to spectra.
+  Generate a Gaussian curve with specified Full Width Half Maximum (FWHM). You can specify either the peak amplitude OR the total area under the curve. This is useful for creating synthetic test data or adding artificial signals to spectra.
   
+        # Using amplitude (traditional method)
         gaussian_array = generate_gaussian(fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
+        
+        # Using area under the curve (new feature)
+        gaussian_array = generate_gaussian(fwhm=10.0, area=1000.0, center=50.0, array_length=100)
 
 - `add_gaussian_to_array()`
   
-  Add a Gaussian curve to an existing data array with broadcasting support for multi-dimensional arrays. The Gaussian can have a different length than the data array (will be zero-padded or truncated as needed).
+  Add a Gaussian curve to an existing data array with broadcasting support for multi-dimensional arrays. The Gaussian can have a different length than the data array (will be zero-padded or truncated as needed). You can specify either amplitude or area.
   
-        # 1D array (default behavior)
+        # 1D array with amplitude (default behavior)
         data_with_gaussian = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0)
+        
+        # 1D array with area (controls total signal strength)
+        data_with_gaussian = add_gaussian_to_array(data, fwhm=10.0, area=1000.0, center=50.0)
         
         # Different Gaussian length (shorter Gaussians are zero-padded, longer ones truncated)
         data_with_gaussian = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0, array_length=150)

@@ -41,7 +41,7 @@ FWHM_TO_SIGMA_FACTOR = 2 * np.sqrt(2 * np.log(2))
 # CORE FUNCTIONS
 # ============================================================================
 
-def generate_gaussian(fwhm, amplitude, center, array_length):
+def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area=None):
     """
     Generate a Gaussian curve with specified Full Width Half Maximum (FWHM).
     
@@ -53,13 +53,16 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
     fwhm : float
         Full Width Half Maximum of the Gaussian (in array index units).
         Must be positive.
-    amplitude : float
-        Peak amplitude of the Gaussian.
+    amplitude : float, optional
+        Peak amplitude of the Gaussian. Specify either amplitude or area, not both.
     center : float
         Center position of the Gaussian (in array index units).
         Must be within [0, array_length).
     array_length : int
         Length of the output array. Must be positive.
+    area : float, optional
+        Total area under the Gaussian curve. Specify either amplitude or area, not both.
+        When area is specified, the amplitude is automatically calculated.
     
     Returns
     -------
@@ -69,15 +72,22 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
     Raises
     ------
     ValueError
-        If fwhm <= 0, array_length <= 0, or center is out of bounds.
+        If fwhm <= 0, array_length <= 0, center is out of bounds,
+        or if both/neither amplitude and area are specified.
     
     Examples
     --------
+    >>> # Using amplitude (traditional method)
     >>> gaussian = generate_gaussian(fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
     >>> print(gaussian.shape)
     (100,)
     >>> print(np.max(gaussian))
     100.0
+    
+    >>> # Using area (new method)
+    >>> gaussian = generate_gaussian(fwhm=10.0, area=1000.0, center=50.0, array_length=100)
+    >>> print(np.sum(gaussian))  # Approximately 1000.0
+    1000.0
     
     >>> # Add to existing data
     >>> data = np.ones(100) * 500
@@ -93,8 +103,22 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
     if center < 0 or center >= array_length:
         raise ValueError(f"center must be within [0, {array_length}), got {center}")
     
+    # Check that either amplitude or area is specified, but not both
+    if amplitude is None and area is None:
+        raise ValueError("Either 'amplitude' or 'area' must be specified")
+    if amplitude is not None and area is not None:
+        raise ValueError("Cannot specify both 'amplitude' and 'area' - choose one")
+    
     # Convert FWHM to standard deviation: FWHM = 2 * sqrt(2 * ln(2)) * sigma
     sigma = fwhm / FWHM_TO_SIGMA_FACTOR
+    
+    # If area is specified, calculate the required amplitude
+    # For a Gaussian: Area = amplitude * sigma * sqrt(2*pi)
+    # Therefore: amplitude = Area / (sigma * sqrt(2*pi))
+    if area is not None:
+        if area <= 0:
+            raise ValueError(f"area must be positive, got {area}")
+        amplitude = area / (sigma * np.sqrt(2 * np.pi))
     
     # Create x-axis array
     x = np.arange(array_length)
@@ -105,7 +129,7 @@ def generate_gaussian(fwhm, amplitude, center, array_length):
     return gaussian_array
 
 
-def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis=-1):
+def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=None, axis=-1, area=None):
     """
     Add a Gaussian curve to an existing array with broadcasting support.
     
@@ -121,8 +145,8 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
     fwhm : float
         Full Width Half Maximum of the Gaussian (in array index units).
         Must be positive.
-    amplitude : float
-        Peak amplitude of the Gaussian.
+    amplitude : float, optional
+        Peak amplitude of the Gaussian. Specify either amplitude or area, not both.
     center : float
         Center position of the Gaussian (in array index units).
     array_length : int, optional
@@ -131,6 +155,9 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
     axis : int, optional
         Axis along which to add the Gaussian for multi-dimensional arrays.
         Default is -1 (last axis). Ignored for 1D arrays.
+    area : float, optional
+        Total area under the Gaussian curve. Specify either amplitude or area, not both.
+        When area is specified, the amplitude is automatically calculated.
     
     Returns
     -------
@@ -140,15 +167,22 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
     Raises
     ------
     ValueError
-        If fwhm <= 0, array_length <= 0, center is out of bounds, or data is empty.
+        If fwhm <= 0, array_length <= 0, center is out of bounds, data is empty,
+        or if both/neither amplitude and area are specified.
     
     Examples
     --------
-    >>> # 1D array (default behavior)
+    >>> # 1D array with amplitude (traditional method)
     >>> data = np.ones(100) * 500
     >>> result = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0)
     >>> print(np.max(result))
     600.0
+    
+    >>> # 1D array with area (new method)
+    >>> data = np.ones(100) * 500
+    >>> result = add_gaussian_to_array(data, fwhm=10.0, area=1000.0, center=50.0)
+    >>> print(np.sum(result - data))  # Approximately 1000.0
+    1000.0
     
     >>> # 2D array - add Gaussian along axis 1 (broadcasting across axis 0)
     >>> data_2d = np.ones((50, 100)) * 500
@@ -157,7 +191,7 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
     (50, 100)
     
     >>> # 2D array - add Gaussian along axis 0
-    >>> result_2d = add_gaussian_to_array(data_2d, fwhm=5.0, amplitude=80.0, center=25.0, axis=0)
+    >>> result_2d = add_gaussian_to_array(data_2d, fwhm=5.0, area=500.0, center=25.0, axis=0)
     """
     data = np.asarray(data)
     
@@ -188,7 +222,7 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
-        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
         
         # Handle different lengths along the axis
         data_len = data.shape[axis]
@@ -225,7 +259,7 @@ def add_gaussian_to_array(data, fwhm, amplitude, center, array_length=None, axis
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
-        gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
         
         # Handle different lengths
         data_len = len(data)
