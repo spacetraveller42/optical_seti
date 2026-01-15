@@ -197,6 +197,16 @@ def spike_plotter(file, window_size = 101, threshold_multiplier = 3.5, center_in
 #   use_area: if True, specify Gaussian by area under curve instead of amplitude (default: False)
 #   area_value: if use_area is True, this is the area under the curve to use for the initial guess
 def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None):
+    # Validate inputs early
+    if use_area:
+        if area_value is None:
+            raise ValueError("area_value must be provided when use_area=True")
+        if area_value <= 0:
+            raise ValueError("area_value must be positive")
+    
+    if hits_start >= hits_end:
+        raise ValueError("hits_start must be less than hits_end")
+    
     wave,arr1 = read_harps_file(file)
     windowpoint1 = hits_start - 100
     windowpoint2 = hits_end + 100
@@ -209,7 +219,7 @@ def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None):
     # If use_area is True, calculate amplitude from area
     # For a Gaussian: area = amplitude * stddev * sqrt(2*pi)
     # Therefore: amplitude = area / (stddev * sqrt(2*pi))
-    if use_area and area_value is not None:
+    if use_area:
         amplitude_guess_wide = area_value / (st_deviation_guess_wide * np.sqrt(2 * np.pi))
         amplitude_guess_narrow = area_value / (st_deviation_guess_narrow * np.sqrt(2 * np.pi))
     else:
