@@ -196,13 +196,17 @@ def spike_plotter(file, window_size = 101, threshold_multiplier = 3.5, center_in
 #   hits_end: ending index of best-guess peak location
 #   use_area: if True, specify Gaussian by area under curve instead of amplitude (default: False)
 #   area_value: if use_area is True, this is the area under the curve to use for the initial guess
-def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None):
+#   stddev_pixels: if provided, specify the standard deviation in pixels/array elements instead of calculating from wavelength (default: None)
+def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None,stddev_pixels=None):
     # Validate inputs early
     if use_area:
         if area_value is None:
             raise ValueError("area_value must be provided when use_area=True")
         if area_value <= 0:
             raise ValueError("area_value must be positive")
+    
+    if stddev_pixels is not None and stddev_pixels <= 0:
+        raise ValueError("stddev_pixels must be positive")
     
     if hits_start >= hits_end:
         raise ValueError("hits_start must be less than hits_end")
@@ -213,8 +217,18 @@ def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None):
     subtracted = arr1 - np.mean(arr1[windowpoint1:windowpoint2])
     peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
     mean_guess = np.mean(wave[hits_start:hits_end])
-    st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
-    st_deviation_guess_narrow = (wave[hits_end] - wave[hits_start]) * 2
+    
+    # Calculate standard deviation guesses
+    if stddev_pixels is not None:
+        # Use specified stddev in pixels, convert to wavelength units
+        # Calculate wavelength per pixel
+        wavelength_per_pixel = (wave[hits_end] - wave[hits_start]) / (hits_end - hits_start) if (hits_end - hits_start) > 0 else np.mean(np.diff(wave[windowpoint1:windowpoint2]))
+        st_deviation_guess_wide = stddev_pixels * wavelength_per_pixel
+        st_deviation_guess_narrow = stddev_pixels * wavelength_per_pixel
+    else:
+        # Original behavior: calculate from wavelength range
+        st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
+        st_deviation_guess_narrow = (wave[hits_end] - wave[hits_start]) * 2
     
     # If use_area is True, calculate amplitude from area
     # For a Gaussian: area = amplitude * stddev * sqrt(2*pi)
