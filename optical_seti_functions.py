@@ -221,11 +221,14 @@ def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None,s
     # Calculate standard deviation guesses
     if stddev_pixels is not None:
         # Use specified stddev in pixels, convert to wavelength units
-        # Calculate wavelength per pixel (hits_start < hits_end already validated)
+        # Calculate wavelength per pixel (assumes approximately uniform spacing)
+        # For non-uniform spacing, this uses the average spacing in the hit region
         wavelength_per_pixel = (wave[hits_end] - wave[hits_start]) / (hits_end - hits_start)
         # Maintain relative scaling: narrow uses stddev_pixels directly, wide is 5x larger
+        # (matching the 10x vs 2x ratio in the original automatic calculation)
+        WIDE_TO_NARROW_RATIO = 5
         st_deviation_guess_narrow = stddev_pixels * wavelength_per_pixel
-        st_deviation_guess_wide = stddev_pixels * wavelength_per_pixel * 5
+        st_deviation_guess_wide = stddev_pixels * wavelength_per_pixel * WIDE_TO_NARROW_RATIO
     else:
         # Original behavior: calculate from wavelength range
         st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
