@@ -221,10 +221,11 @@ def gaussian_curve_fit(file,hits_start,hits_end,use_area=False,area_value=None,s
     # Calculate standard deviation guesses
     if stddev_pixels is not None:
         # Use specified stddev in pixels, convert to wavelength units
-        # Calculate wavelength per pixel
-        wavelength_per_pixel = (wave[hits_end] - wave[hits_start]) / (hits_end - hits_start) if (hits_end - hits_start) > 0 else np.mean(np.diff(wave[windowpoint1:windowpoint2]))
-        st_deviation_guess_wide = stddev_pixels * wavelength_per_pixel
+        # Calculate wavelength per pixel (hits_start < hits_end already validated)
+        wavelength_per_pixel = (wave[hits_end] - wave[hits_start]) / (hits_end - hits_start)
+        # Maintain relative scaling: narrow uses stddev_pixels directly, wide is 5x larger
         st_deviation_guess_narrow = stddev_pixels * wavelength_per_pixel
+        st_deviation_guess_wide = stddev_pixels * wavelength_per_pixel * 5
     else:
         # Original behavior: calculate from wavelength range
         st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
