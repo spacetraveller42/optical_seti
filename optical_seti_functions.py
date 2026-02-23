@@ -225,11 +225,18 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 
 # Perform optimal extraction on a raw HARPS CCD image using PyReduce.
 #
-# Optimal extraction (Horne 1986) uses the known spatial profile (slit function)
-# of each spectral order to weight pixels during extraction. Cosmic ray hits,
-# which affect only one or two pixels and do not match the expected spatial profile,
-# are effectively rejected. Real light spread by the telescope optics matches the
-# slit function and is preserved.
+# This function extracts spectra while filtering out anything that is not actual
+# light entering the instrument's optics.  It handles:
+#   - Bias: electronic offset from the readout electronics (subtracted if bias provided)
+#   - Dark current: thermal electrons that accumulate during exposure (subtracted if dark provided)
+#   - Bad/hot pixels: detector defects that produce spurious signal (masked if bad_pixel_mask provided)
+#   - Scattered light: stray light inside the spectrograph not from the intended optical path
+#   - Cosmic rays: high-energy particle hits affecting one or two pixels
+# After calibration, the Horne (1986) optimal extraction algorithm uses the known
+# spatial profile (slit function) of each spectral order to weight pixels.  Any
+# remaining single-pixel artifacts (cosmic rays, residual hot pixels) that do not
+# match the expected spatial profile are rejected.  Real light spread by the
+# telescope optics matches the slit function and is preserved.
 #
 # Input arguments:
 #   raw_image: 2D numpy array of the raw CCD image, or a FITS filename to load.
@@ -241,6 +248,16 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 #       or a scalar applied symmetrically to all orders. Default is 5 pixels.
 #   column_range: array [nord, 2] specifying the valid column range for each order,
 #       or None to use the full image width.
+#   bias: 2D array (or scalar) to subtract as the bias level.  This removes the
+#       electronic offset added by the CCD readout electronics. (default: None)
+#   dark: 2D array to subtract as the dark current frame.  This removes thermally
+#       generated electrons that are not from photons. (default: None)
+#   bad_pixel_mask: 2D boolean array where True marks bad/hot pixels to exclude.
+#       These are detector defects that produce spurious signal regardless of
+#       illumination. Masked pixels are replaced with the median of their
+#       neighbors before extraction. (default: None)
+#   scatter: background scattered light model, array [nord, 4, ncol] of polynomial
+#       coefficients for inter-order background. (default: None)
 #   gain: CCD gain in electrons/ADU (default: 1.0)
 #   readnoise: CCD read noise in electrons (default: 0.0)
 #   lambda_sf: slit function smoothing parameter (default: 0.1)
@@ -251,17 +268,20 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 #   plot: whether to plot extraction progress (default: False)
 #
 # Output arguments:
-#   spectrum: array [nord, ncol] of extracted spectra (cosmic rays filtered out)
+#   spectrum: array [nord, ncol] of extracted spectra (non-optical artifacts filtered out)
 #   uncertainties: array [nord, ncol] of uncertainties on the extracted spectra
 #   slitfunction: array [nord, nslitf] of recovered slit functions
 
 def optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5,
-                             column_range=None, gain=1.0, readnoise=0.0,
+                             column_range=None, bias=None, dark=None,
+                             bad_pixel_mask=None, scatter=None,
+                             gain=1.0, readnoise=0.0,
                              lambda_sf=0.1, lambda_sp=0, osample=1,
                              swath_width=None, maxiter=20, plot=False):
 
     from pyreduce.extract import optimal_extraction, fix_extraction_width, fix_column_range
     from pyreduce.trace_orders import mark_orders
+    from scipy.ndimage import median_filter
 
     # Load image from file if a filename is given
     if isinstance(raw_image, (str, Path)):
@@ -280,6 +300,22 @@ def optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5,
 
     if raw_image.ndim != 2:
         raise ValueError("raw_image must be a 2D array, got shape {}".format(raw_image.shape))
+
+    # --- Calibration: remove non-optical artifacts before extraction ---
+
+    # Subtract bias (electronic readout offset)
+    if bias is not None:
+        raw_image = raw_image - np.asarray(bias, dtype=float)
+
+    # Subtract dark current (thermal electrons)
+    if dark is not None:
+        raw_image = raw_image - np.asarray(dark, dtype=float)
+
+    # Replace bad/hot pixels with local median so they don't corrupt extraction
+    if bad_pixel_mask is not None:
+        bad_pixel_mask = np.asarray(bad_pixel_mask, dtype=bool)
+        filtered = median_filter(raw_image, size=5)
+        raw_image[bad_pixel_mask] = filtered[bad_pixel_mask]
 
     nrow, ncol = raw_image.shape
 
@@ -309,10 +345,13 @@ def optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5,
     tilt = [None] * nord
     shear = [None] * nord
 
-    # Perform optimal extraction with cosmic ray rejection
+    # Perform optimal extraction.  The slit-function decomposition rejects any
+    # remaining pixel-level artifacts (cosmic rays, residual hot pixels, etc.)
+    # that do not match the expected spatial profile, while preserving real light.
     spectrum, slitfunction, uncertainties = optimal_extraction(
         raw_image, order_traces, extraction_width, column_range,
         tilt=tilt, shear=shear,
+        scatter=scatter,
         gain=gain, readnoise=readnoise,
         lambda_sf=lambda_sf, lambda_sp=lambda_sp,
         osample=osample, swath_width=swath_width,

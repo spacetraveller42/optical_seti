@@ -1,5 +1,6 @@
 # Test to verify that optimal_extraction_harps correctly extracts spectra
-# and filters out cosmic rays while preserving real spectral signal.
+# and filters out non-optical artifacts while preserving real spectral signal.
+# Artifacts tested: cosmic rays, hot/bad pixels, dark current, and bias offset.
 
 import sys
 from pathlib import Path
@@ -28,6 +29,23 @@ cosmic_ray_col = 250
 cosmic_ray_row = order_center
 img[cosmic_ray_row, cosmic_ray_col] += 50000.0
 
+# Add a uniform bias offset (electronic readout artifact)
+bias_level = 200.0
+img += bias_level
+
+# Add dark current (thermal noise accumulating over the whole detector)
+dark_frame = np.full((nrow, ncol), 50.0)
+
+# Mark bad/hot pixels (detector defects producing spurious signal)
+bad_pixel_mask = np.zeros((nrow, ncol), dtype=bool)
+hot_pixel_col = 300
+hot_pixel_row = order_center
+bad_pixel_mask[hot_pixel_row, hot_pixel_col] = True
+img[hot_pixel_row, hot_pixel_col] += 30000.0  # hot pixel artifact
+
+# Add dark current to the image
+img += dark_frame
+
 # Define order traces (polynomial coefficients, highest degree first)
 order_traces = np.array([
     [0, 0, 0, 0, order_center - 20],  # extension order below
@@ -35,9 +53,10 @@ order_traces = np.array([
     [0, 0, 0, 0, order_center + 20],  # extension order above
 ])
 
-# Run extraction
+# Run extraction with calibration frames to remove non-optical artifacts
 spectrum, uncertainties, slitfunction = optical_seti_functions.optimal_extraction_harps(
-    img, order_traces=order_traces, extraction_width=order_width
+    img, order_traces=order_traces, extraction_width=order_width,
+    bias=bias_level, dark=dark_frame, bad_pixel_mask=bad_pixel_mask
 )
 
 # Verify output shapes
@@ -47,9 +66,14 @@ assert uncertainties.shape == (3, ncol), "Uncertainties shape mismatch"
 # Verify cosmic ray rejection: the extracted value at the cosmic ray location
 # should be close to the value at neighboring columns (within 50%)
 real_spec = spectrum[1]
-ratio = real_spec[cosmic_ray_col] / real_spec[cosmic_ray_col + 10]
-assert abs(ratio - 1) < 0.5, "Cosmic ray not rejected: ratio = {}".format(ratio)
+ratio_cr = real_spec[cosmic_ray_col] / real_spec[cosmic_ray_col + 10]
+assert abs(ratio_cr - 1) < 0.5, "Cosmic ray not rejected: ratio = {}".format(ratio_cr)
+
+# Verify hot pixel rejection: the hot pixel should be masked and not affect extraction
+ratio_hp = real_spec[hot_pixel_col] / real_spec[hot_pixel_col + 10]
+assert abs(ratio_hp - 1) < 0.5, "Hot pixel not rejected: ratio = {}".format(ratio_hp)
 
 print("All tests passed.")
 print("  Spectrum shape:", spectrum.shape)
-print("  Cosmic ray rejection ratio:", ratio)
+print("  Cosmic ray rejection ratio:", ratio_cr)
+print("  Hot pixel rejection ratio:", ratio_hp)

@@ -41,9 +41,9 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
 
 - `optimal_extraction_harps()`
   
-  Perform optimal extraction on a raw HARPS CCD image using PyReduce. Uses the Horne (1986) optimal extraction algorithm, which models the spatial profile (slit function) of each spectral order. Cosmic ray hits, which affect only one or two pixels and do not match the expected spatial profile, are effectively rejected during extraction. Real light from the instrument, spread by the telescope optics, matches the slit function and is preserved.
+  Perform optimal extraction on a raw HARPS CCD image using PyReduce, filtering out anything that is not actual light entering the instrument's optics.  Optional calibration frames remove bias (electronic readout offset), dark current (thermal electrons), and bad/hot pixel defects before extraction.  The Horne (1986) optimal extraction algorithm then models the spatial profile (slit function) of each spectral order; any remaining pixel-level artifacts (cosmic rays, residual hot pixels) that do not match the expected spatial profile are rejected.  Real light from the instrument, spread by the telescope optics, matches the slit function and is preserved.
 
-        spectrum, uncertainties, slitfunction = optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5, gain=1.0, readnoise=0.0)
+        spectrum, uncertainties, slitfunction = optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5, bias=None, dark=None, bad_pixel_mask=None, gain=1.0, readnoise=0.0)
 
 ### `seti_catalog_functions.py`
 These functions operate on entire catalogs of stars (CSV/TSV text files).
