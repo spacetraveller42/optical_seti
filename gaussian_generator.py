@@ -281,7 +281,6 @@ def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=
         gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, 
                                     array_length=array_length, area=area,
                                     wavelength=wavelength, wavelengths=wavelengths)
-        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
         
         # Handle different lengths along the axis
         data_len = data.shape[axis]
