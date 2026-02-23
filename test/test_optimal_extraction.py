@@ -1,6 +1,7 @@
 # Test to verify that optimal_extraction_harps correctly extracts spectra
 # and filters out non-optical artifacts while preserving real spectral signal.
 # Artifacts tested: cosmic rays, hot/bad pixels, dark current, and bias offset.
+# Tests both the standalone module import and the backward-compatible import.
 
 import sys
 from pathlib import Path
@@ -9,7 +10,13 @@ optical_seti_dir = cwd.parent.resolve()
 sys.path.append(str(optical_seti_dir))
 
 import numpy as np
+
+# Test standalone module import
+from optimal_extraction import optimal_extraction_harps
+
+# Also verify backward-compatible import still works
 import optical_seti_functions
+assert optical_seti_functions.optimal_extraction_harps is optimal_extraction_harps
 
 # Create a synthetic CCD image with one spectral order
 nrow, ncol = 100, 500
@@ -54,7 +61,7 @@ order_traces = np.array([
 ])
 
 # Run extraction with calibration frames to remove non-optical artifacts
-spectrum, uncertainties, slitfunction = optical_seti_functions.optimal_extraction_harps(
+spectrum, uncertainties, slitfunction = optimal_extraction_harps(
     img, order_traces=order_traces, extraction_width=order_width,
     bias=bias_level, dark=dark_frame, bad_pixel_mask=bad_pixel_mask
 )

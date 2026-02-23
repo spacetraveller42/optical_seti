@@ -18,8 +18,18 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
 
 ## Modules and Primary Functions
 
+### `optimal_extraction.py`
+Standalone module for optimal extraction of HARPS spectra.  This file is self-contained and can be copied into any project independently.
+
+- `optimal_extraction_harps()`
+  
+  Perform optimal extraction on a raw HARPS CCD image using PyReduce, filtering out anything that is not actual light entering the instrument's optics.  Optional calibration frames remove bias (electronic readout offset), dark current (thermal electrons), and bad/hot pixel defects before extraction.  The Horne (1986) optimal extraction algorithm then models the spatial profile (slit function) of each spectral order; any remaining pixel-level artifacts (cosmic rays, residual hot pixels) that do not match the expected spatial profile are rejected.  Real light from the instrument, spread by the telescope optics, matches the slit function and is preserved.
+
+        from optimal_extraction import optimal_extraction_harps
+        spectrum, uncertainties, slitfunction = optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5, bias=None, dark=None, bad_pixel_mask=None, gain=1.0, readnoise=0.0)
+
 ### `optical_seti_functions.py`
- This file contains the main search algorithm and support routines.
+ This file contains the main search algorithm and support routines.  It re-exports `optimal_extraction_harps` from `optimal_extraction.py` for backward compatibility.
 
 - `seti_spike_analyzer()`
   
@@ -38,12 +48,6 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
   Fit a Gaussian curve to a spectral line found at `hits_start` to `hits_end`, plot both, return the width of the Gaussian fit.
   
         fwhm = gaussian_curve_fit("filename.fits",hits_start,hits_end)
-
-- `optimal_extraction_harps()`
-  
-  Perform optimal extraction on a raw HARPS CCD image using PyReduce, filtering out anything that is not actual light entering the instrument's optics.  Optional calibration frames remove bias (electronic readout offset), dark current (thermal electrons), and bad/hot pixel defects before extraction.  The Horne (1986) optimal extraction algorithm then models the spatial profile (slit function) of each spectral order; any remaining pixel-level artifacts (cosmic rays, residual hot pixels) that do not match the expected spatial profile are rejected.  Real light from the instrument, spread by the telescope optics, matches the slit function and is preserved.
-
-        spectrum, uncertainties, slitfunction = optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5, bias=None, dark=None, bad_pixel_mask=None, gain=1.0, readnoise=0.0)
 
 ### `seti_catalog_functions.py`
 These functions operate on entire catalogs of stars (CSV/TSV text files).
