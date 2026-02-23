@@ -1,0 +1,89 @@
+╔═══════════════════════════════════════════════════════════════════════╗
+║                WAVELENGTH INJECTION: WHICH PARAMETER TO USE?          ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+YOUR SITUATION: You want to inject at 0.532 microns (green laser)
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  ❌ WRONG WAY (what you were doing)                                   │
+└───────────────────────────────────────────────────────────────────────┘
+
+   Code:
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ result = add_gaussian_to_array(flux, fwhm=3.0, amplitude=0.05, │
+   │                                center=0.532)                    │
+   └─────────────────────────────────────────────────────────────────┘
+
+   What happens:
+   • 0.532 is interpreted as ARRAY INDEX
+   • Index 0.532 ≈ position 1
+   • Position 1 = LEFT EDGE of your spectrum
+   
+   Result:
+   • Peak at wavelength: 0.228571 microns
+   • Position: 0.7% through array (EDGE!)
+   • ❌ NOT where you wanted it!
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  ✓ CORRECT WAY (use wavelength parameter)                            │
+└───────────────────────────────────────────────────────────────────────┘
+
+   Code:
+   ┌─────────────────────────────────────────────────────────────────┐
+   │ result = add_gaussian_to_array(flux, fwhm=3.0, amplitude=0.05, │
+   │                                wavelength=0.532,                │
+   │                                wavelengths=wavelengths)         │
+   └─────────────────────────────────────────────────────────────────┘
+
+   What happens:
+   • 0.532 is interpreted as WAVELENGTH (microns)
+   • Code finds where 0.532 falls in wavelengths array
+   • Interpolates to fractional index: 12.5621
+   • Injects at that precise position
+   
+   Result:
+   • Peak at wavelength: 0.533657 microns
+   • Target: 0.532000 microns
+   • Error: 1.66 nm (expected due to discrete sampling)
+   • Position: 8.7% through array (MIDDLE!)
+   • ✓ Exactly where you wanted it!
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  PARAMETER COMPARISON                                                 │
+└───────────────────────────────────────────────────────────────────────┘
+
+   Parameter: center
+   ─────────────────────────────────────────────────────────────────
+   Type:      Array INDEX (integer or float)
+   Range:     0 to 150 (for your 151-element array)
+   Example:   center=50 → injects at 50th element
+   Use when:  You know the array position
+   
+   Parameter: wavelength
+   ─────────────────────────────────────────────────────────────────
+   Type:      Physical WAVELENGTH (float in your units)
+   Range:     0.2 to 1.995 (microns, matches your array)
+   Example:   wavelength=0.532 → injects at 0.532 microns
+   Use when:  You know the physical wavelength
+   Requires:  wavelengths=<your_wavelength_array>
+   
+   ⭐ BONUS: Wavelength parameter supports interpolation!
+            Works even if 0.532 is NOT in your wavelengths array!
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  QUICK REFERENCE                                                      │
+└───────────────────────────────────────────────────────────────────────┘
+
+   Want to inject at array position 50?
+   → Use: center=50
+   
+   Want to inject at wavelength 0.532 microns?
+   → Use: wavelength=0.532, wavelengths=wavelengths
+   
+   Want to inject at wavelength between array elements?
+   → Use: wavelength=0.532, wavelengths=wavelengths
+        (Same syntax! Interpolation is automatic!)
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  SUMMARY: Use wavelength=0.532 (not center=0.532) for your laser!    ║
+╚═══════════════════════════════════════════════════════════════════════╝
