@@ -220,3 +220,103 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     #GJ551 HITS_STARTS: 13812, 39670 (something's odd), 43403, 45101, 59377, 64514, 67948, 76729, 80165
     plt.show()
     return fwhm
+
+# ##### 5.  OPTIMAL EXTRACTION
+
+# Perform optimal extraction on a raw HARPS CCD image using PyReduce.
+#
+# Optimal extraction (Horne 1986) uses the known spatial profile (slit function)
+# of each spectral order to weight pixels during extraction. Cosmic ray hits,
+# which affect only one or two pixels and do not match the expected spatial profile,
+# are effectively rejected. Real light spread by the telescope optics matches the
+# slit function and is preserved.
+#
+# Input arguments:
+#   raw_image: 2D numpy array of the raw CCD image, or a FITS filename to load.
+#   order_traces: array of polynomial coefficients for order tracing, shape [nord, degree].
+#       Each row contains polynomial coefficients (highest degree first) that describe
+#       the y-position of the order center as a function of x-pixel.
+#       If None, orders will be traced automatically from the image.
+#   extraction_width: extraction width in pixels (below, above), shape [nord, 2],
+#       or a scalar applied symmetrically to all orders. Default is 5 pixels.
+#   column_range: array [nord, 2] specifying the valid column range for each order,
+#       or None to use the full image width.
+#   gain: CCD gain in electrons/ADU (default: 1.0)
+#   readnoise: CCD read noise in electrons (default: 0.0)
+#   lambda_sf: slit function smoothing parameter (default: 0.1)
+#   lambda_sp: spectrum smoothing parameter (default: 0)
+#   osample: oversampling factor for the slit function (default: 1)
+#   swath_width: width of swaths for extraction (default: None, auto-determined)
+#   maxiter: maximum iterations for the slit function decomposition (default: 20)
+#   plot: whether to plot extraction progress (default: False)
+#
+# Output arguments:
+#   spectrum: array [nord, ncol] of extracted spectra (cosmic rays filtered out)
+#   uncertainties: array [nord, ncol] of uncertainties on the extracted spectra
+#   slitfunction: array [nord, nslitf] of recovered slit functions
+
+def optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5,
+                             column_range=None, gain=1.0, readnoise=0.0,
+                             lambda_sf=0.1, lambda_sp=0, osample=1,
+                             swath_width=None, maxiter=20, plot=False):
+
+    from pyreduce.extract import optimal_extraction, fix_extraction_width, fix_column_range
+    from pyreduce.trace_orders import mark_orders
+
+    # Load image from file if a filename is given
+    if isinstance(raw_image, (str, Path)):
+        with fits.open(raw_image) as hdul:
+            img_data = hdul[0].data
+            if img_data is None:
+                # Try the first extension with image data
+                for ext in hdul:
+                    if ext.data is not None and ext.data.ndim == 2:
+                        img_data = ext.data
+                        break
+            if img_data is None:
+                raise ValueError("No 2D image data found in FITS file")
+            raw_image = img_data.astype(float)
+    raw_image = np.asarray(raw_image, dtype=float)
+
+    if raw_image.ndim != 2:
+        raise ValueError("raw_image must be a 2D array, got shape {}".format(raw_image.shape))
+
+    nrow, ncol = raw_image.shape
+
+    # Trace orders automatically if not provided
+    if order_traces is None:
+        order_traces = mark_orders(raw_image, manual=False, plot=plot)
+
+    order_traces = np.asarray(order_traces)
+    nord = len(order_traces)
+
+    # Set up column range
+    if column_range is None:
+        column_range = np.tile([0, ncol], (nord, 1))
+    column_range = np.asarray(column_range, dtype=int)
+
+    # Set up extraction width
+    if np.isscalar(extraction_width):
+        extraction_width = np.full((nord, 2), extraction_width, dtype=float)
+    extraction_width = np.asarray(extraction_width, dtype=float)
+
+    # Fix extraction width and column range to stay within image bounds
+    extraction_width = fix_extraction_width(extraction_width, order_traces, column_range, ncol)
+    column_range, order_traces = fix_column_range(column_range, order_traces, extraction_width, nrow, ncol)
+
+    # No tilt or shear correction by default (straight orders).
+    # optimal_extraction expects per-order arrays (list of arrays or Nones).
+    tilt = [None] * nord
+    shear = [None] * nord
+
+    # Perform optimal extraction with cosmic ray rejection
+    spectrum, slitfunction, uncertainties = optimal_extraction(
+        raw_image, order_traces, extraction_width, column_range,
+        tilt=tilt, shear=shear,
+        gain=gain, readnoise=readnoise,
+        lambda_sf=lambda_sf, lambda_sp=lambda_sp,
+        osample=osample, swath_width=swath_width,
+        maxiter=maxiter, plot=plot
+    )
+
+    return spectrum, uncertainties, slitfunction

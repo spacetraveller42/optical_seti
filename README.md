@@ -12,6 +12,7 @@ This project runs in Python 3.  To use it, the user must install the following p
 - `astroquery`
 - `matplotlib`
 - `specutils`
+- `pyreduce-astro`
 
 You must also have an [account set up](https://www.eso.org/sso/login?service=https%3a%2f%2farchive.eso.org%2fwdb%2fforms%2fcas%2feso_archive_main.html) at the ESO Archive, and have configured `astroquery` to [store your password](https://astroquery.readthedocs.io/en/latest/eso/eso.html#automatic-password) in its keyring.
 
@@ -37,6 +38,12 @@ You must also have an [account set up](https://www.eso.org/sso/login?service=htt
   Fit a Gaussian curve to a spectral line found at `hits_start` to `hits_end`, plot both, return the width of the Gaussian fit.
   
         fwhm = gaussian_curve_fit("filename.fits",hits_start,hits_end)
+
+- `optimal_extraction_harps()`
+  
+  Perform optimal extraction on a raw HARPS CCD image using PyReduce. Uses the Horne (1986) optimal extraction algorithm, which models the spatial profile (slit function) of each spectral order. Cosmic ray hits, which affect only one or two pixels and do not match the expected spatial profile, are effectively rejected during extraction. Real light from the instrument, spread by the telescope optics, matches the slit function and is preserved.
+
+        spectrum, uncertainties, slitfunction = optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5, gain=1.0, readnoise=0.0)
 
 ### `seti_catalog_functions.py`
 These functions operate on entire catalogs of stars (CSV/TSV text files).
