@@ -237,12 +237,46 @@ def gaussian_curve_fit(file,hits_start,hits_end):
 #   array_length: Length of the output array
 # Output:
 #   gaussian_array: numpy array containing the Gaussian curve
-def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area=None):
+def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area=None,
+                     wavelength=None, wavelengths=None):
     # Input validation
     if fwhm <= 0:
         raise ValueError(f"FWHM must be positive, got {fwhm}")
     if array_length <= 0:
         raise ValueError(f"array_length must be positive, got {array_length}")
+    
+    # Check that either center or wavelength is specified, but not both
+    if center is None and wavelength is None:
+        raise ValueError("Either 'center' or 'wavelength' must be specified")
+    if center is not None and wavelength is not None:
+        raise ValueError("Cannot specify both 'center' and 'wavelength' - choose one")
+    
+    # Handle wavelength-based center specification
+    if wavelength is not None:
+        if wavelengths is None:
+            raise ValueError("'wavelengths' array must be provided when using 'wavelength' parameter")
+        
+        wavelengths = np.asarray(wavelengths)
+        
+        # Validate wavelengths array
+        if len(wavelengths) != array_length:
+            raise ValueError(f"wavelengths array length ({len(wavelengths)}) must match array_length ({array_length})")
+        
+        # Check if wavelengths array is monotonic
+        if not (np.all(np.diff(wavelengths) > 0) or np.all(np.diff(wavelengths) < 0)):
+            raise ValueError("wavelengths array must be monotonically increasing or decreasing")
+        
+        # Check if target wavelength is within range
+        wave_min, wave_max = np.min(wavelengths), np.max(wavelengths)
+        if wavelength < wave_min or wavelength > wave_max:
+            raise ValueError(f"wavelength {wavelength} is outside wavelengths range [{wave_min}, {wave_max}]")
+        
+        # Convert wavelength to fractional array index using interpolation
+        # This allows wavelengths between array elements
+        indices = np.arange(array_length)
+        center = float(np.interp(wavelength, wavelengths, indices))
+    
+    # Validate center position
     if center < 0 or center >= array_length:
         raise ValueError(f"center must be within [0, {array_length}), got {center}")
     
@@ -287,7 +321,8 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
 #   area: (optional) Area under the Gaussian curve. Specify either amplitude or area, not both.
 # Output:
 #   result: numpy array with the Gaussian added to the input data
-def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=None, axis=-1, area=None):
+def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=None, axis=-1, area=None,
+                         wavelength=None, wavelengths=None):
     data = np.asarray(data)
     
     # Validate input data
@@ -312,12 +347,13 @@ def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=
         if array_length <= 0:
             raise ValueError(f"array_length must be positive, got {array_length}")
         
-        # Validate center is within bounds
-        if center < 0 or center >= array_length:
+        # Validate center is within bounds (only if center is provided, not wavelength)
+        if center is not None and (center < 0 or center >= array_length):
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
-        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
+        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area,
+                                    wavelength=wavelength, wavelengths=wavelengths)
         
         # Handle different lengths along the axis
         data_len = data.shape[axis]
@@ -349,12 +385,13 @@ def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=
         if array_length <= 0:
             raise ValueError(f"array_length must be positive, got {array_length}")
         
-        # Validate center is within bounds
-        if center < 0 or center >= array_length:
+        # Validate center is within bounds (only if center is provided, not wavelength)
+        if center is not None and (center < 0 or center >= array_length):
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
         # Generate Gaussian with specified length
-        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area)
+        gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, array_length=array_length, area=area,
+                                    wavelength=wavelength, wavelengths=wavelengths)
         
         # Handle different lengths
         data_len = len(data)
