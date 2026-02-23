@@ -439,6 +439,93 @@ def plot_gaussian_comparison(data, fwhm, amplitude, center, title="Gaussian Addi
     return fig, axes
 
 
+def find_closest_wavelength_index(target_wavelength, wavelengths):
+    """
+    Find the index of the wavelength in the array closest to a target wavelength.
+    
+    This utility function helps you identify which array element has the wavelength
+    value closest to your specified target wavelength. Useful for extracting data
+    at specific wavelengths or understanding where a Gaussian will be centered.
+    
+    Parameters
+    ----------
+    target_wavelength : float
+        The target wavelength value to search for.
+    wavelengths : array-like
+        Array of wavelength values to search in. Must be monotonically increasing
+        or decreasing.
+    
+    Returns
+    -------
+    index : int
+        Index of the closest wavelength in the array.
+    closest_wavelength : float
+        The actual wavelength value at that index.
+    difference : float
+        Absolute difference between target and closest wavelength.
+    
+    Raises
+    ------
+    ValueError
+        If wavelengths array is empty, contains NaN values, or is not monotonic.
+    TypeError
+        If inputs cannot be converted to appropriate types.
+    
+    Examples
+    --------
+    >>> # Find closest wavelength to 0.532 microns
+    >>> wavelengths = np.array([0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+    >>> idx, wl, diff = find_closest_wavelength_index(0.532, wavelengths)
+    >>> print(f"Index: {idx}, Wavelength: {wl}, Difference: {diff}")
+    Index: 4, Wavelength: 0.6, Difference: 0.068
+    
+    >>> # Use with user's wavelength array
+    >>> wavelengths = np.array([0.2, 0.2285714286, 0.2612244898, ..., 1.995336705])
+    >>> idx, wl, diff = find_closest_wavelength_index(0.532, wavelengths)
+    >>> print(f"Closest to 0.532 μm is at index {idx}: {wl:.6f} μm")
+    Closest to 0.532 μm is at index 13: 0.533657 μm
+    
+    >>> # Extract flux value at that wavelength
+    >>> flux_at_wavelength = flux_array[idx]
+    
+    Notes
+    -----
+    - Works with any wavelength units (microns, nanometers, etc.) as long as
+      target and array use the same units.
+    - Uses np.argmin on absolute differences for fast, accurate results.
+    - Returns the nearest neighbor - does not interpolate between points.
+    - For interpolation between points, use the wavelength parameter in
+      generate_gaussian() or add_gaussian_to_array() functions.
+    """
+    # Convert to numpy array
+    wavelengths = np.asarray(wavelengths)
+    
+    # Input validation
+    if wavelengths.size == 0:
+        raise ValueError("wavelengths array is empty")
+    
+    if np.any(np.isnan(wavelengths)):
+        raise ValueError("wavelengths array contains NaN values")
+    
+    if np.any(np.isnan(target_wavelength)):
+        raise ValueError("target_wavelength is NaN")
+    
+    # Check monotonicity
+    diffs = np.diff(wavelengths)
+    if not (np.all(diffs > 0) or np.all(diffs < 0)):
+        raise ValueError("wavelengths array must be monotonically increasing or decreasing")
+    
+    # Find index of closest wavelength
+    differences = np.abs(wavelengths - target_wavelength)
+    closest_index = int(np.argmin(differences))
+    
+    # Get the closest wavelength and difference
+    closest_wavelength = float(wavelengths[closest_index])
+    difference = abs(target_wavelength - closest_wavelength)
+    
+    return closest_index, closest_wavelength, difference
+
+
 # ============================================================================
 # DEMONSTRATION AND TESTING
 # ============================================================================

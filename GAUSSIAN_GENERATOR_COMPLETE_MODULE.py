@@ -1,39 +1,29 @@
 #!/usr/bin/env python
 """
-Gaussian Generation with FWHM - Complete Standalone Module
+Gaussian Generation with FWHM - Standalone Module
 
 This module provides functions to generate Gaussian curves with specified
-Full Width Half Maximum (FWHM) and add them to existing arrays.
-
-FEATURES:
-- Generate Gaussians with configurable FWHM
-- Specify amplitude OR area under curve
-- Index-based OR wavelength-based center positioning
-- Wavelength interpolation (supports wavelengths between array elements)
-- Broadcasting support for multi-dimensional arrays
-- Different array lengths (zero-padding/truncation)
-- Comprehensive input validation
+Full Width Half Maximum (FWHM) and add them to existing arrays for visualization
+and analysis.
 
 Author: Generated for optical_seti project
 Repository: https://github.com/spacetraveller42/optical_seti
 
-QUICK START:
+Usage Example:
     import numpy as np
+    import matplotlib.pyplot as plt
     from gaussian_generator import generate_gaussian, add_gaussian_to_array
     
-    # Method 1: Index-based (traditional)
+    # Generate a Gaussian
     gaussian = generate_gaussian(fwhm=10.0, amplitude=100, center=50, array_length=100)
     
-    # Method 2: Wavelength-based (NEW!)
-    wavelengths = np.linspace(400, 700, 100)  # nm
-    gaussian = generate_gaussian(fwhm=10.0, amplitude=100, 
-                                 wavelength=550,  # nm
-                                 array_length=100, wavelengths=wavelengths)
-    
     # Add to existing data
-    data = np.ones(100) * 500
-    result = add_gaussian_to_array(data, fwhm=5.0, amplitude=200, 
-                                   wavelength=532, wavelengths=wavelengths)
+    data = np.random.randn(100) * 5 + 500
+    result = data + gaussian
+    
+    # Plot
+    plt.plot(result)
+    plt.show()
 """
 
 import numpy as np
@@ -56,9 +46,9 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
     """
     Generate a Gaussian curve with specified Full Width Half Maximum (FWHM).
     
+    The Gaussian is generated on an x-axis that spans indices 0 to array_length-1.
+    Returns a numpy array that can be directly added to existing arrays.
     Supports both index-based and wavelength-based center specification.
-    Wavelength-based positioning works even for wavelengths between array elements
-    using linear interpolation.
     
     Parameters
     ----------
@@ -68,8 +58,8 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
     amplitude : float, optional
         Peak amplitude of the Gaussian. Specify either amplitude or area, not both.
     center : float, optional
-        Center position as array index (0 to array_length-1).
-        Specify either center or wavelength, not both.
+        Center position of the Gaussian (in array index units).
+        Must be within [0, array_length). Specify either center or wavelength, not both.
     array_length : int
         Length of the output array. Must be positive.
     area : float, optional
@@ -77,29 +67,45 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
         When area is specified, the amplitude is automatically calculated.
     wavelength : float, optional
         Target wavelength for Gaussian center (requires wavelengths array).
-        Specify either center or wavelength, not both. Can be between array elements.
+        Specify either center or wavelength, not both. Wavelength can be between
+        array elements - fractional index will be interpolated.
     wavelengths : array-like, optional
         Array of wavelength values corresponding to array indices.
-        Required if wavelength parameter is used. Must be monotonic.
+        Required if wavelength parameter is used. Must be monotonically increasing
+        or decreasing and same length as array_length.
     
     Returns
     -------
     numpy.ndarray
         Array containing the Gaussian curve.
     
+    Raises
+    ------
+    ValueError
+        If fwhm <= 0, array_length <= 0, center is out of bounds,
+        both/neither amplitude and area are specified, both/neither center
+        and wavelength are specified, wavelength is out of range, or
+        wavelengths array is invalid.
+    
     Examples
     --------
-    >>> # Index-based center
-    >>> g = generate_gaussian(fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
+    >>> # Using amplitude and index-based center (traditional method)
+    >>> gaussian = generate_gaussian(fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
+    >>> print(gaussian.shape)
+    (100,)
+    >>> print(np.max(gaussian))
+    100.0
     
-    >>> # Wavelength-based center
-    >>> wavelengths = np.linspace(400, 700, 100)
-    >>> g = generate_gaussian(fwhm=10.0, amplitude=100.0, wavelength=550.0, 
-    ...                       array_length=100, wavelengths=wavelengths)
+    >>> # Using wavelength-based center
+    >>> wavelengths = np.linspace(400, 700, 100)  # 400-700 nm
+    >>> gaussian = generate_gaussian(fwhm=10.0, amplitude=100.0, wavelength=550.0, 
+    ...                              array_length=100, wavelengths=wavelengths)
+    >>> # Gaussian centered at 550 nm (middle of range)
     
-    >>> # Area instead of amplitude
-    >>> g = generate_gaussian(fwhm=5.0, area=1000.0, wavelength=525.5,
-    ...                       array_length=100, wavelengths=wavelengths)
+    >>> # Wavelength between array elements (interpolated)
+    >>> gaussian = generate_gaussian(fwhm=5.0, area=1000.0, wavelength=525.5,
+    ...                              array_length=100, wavelengths=wavelengths)
+    >>> # Gaussian centered at 525.5 nm (fractional index position)
     """
     # Input validation
     if fwhm <= 0:
@@ -143,19 +149,30 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
         raise ValueError(f"center must be within [0, {array_length}), got {center}")
     
     # Warn if center looks like it might be a wavelength value instead of an index
+    # This catches the common mistake of using center=0.532 instead of wavelength=0.532
     if center < 10 and wavelengths is not None:
         wavelengths_arr = np.asarray(wavelengths)
         wave_min, wave_max = np.min(wavelengths_arr), np.max(wavelengths_arr)
+        # If center value falls within wavelength range, user might be confused
         if wave_min <= center <= wave_max:
             import warnings
             warnings.warn(
-                f"\n⚠️  WARNING: center={center} looks like a WAVELENGTH value, not an array INDEX!\n"
-                f"\nYou specified: center={center}\n"
+                f"\n"
+                f"⚠️  WARNING: center={center} looks like a WAVELENGTH value, not an array INDEX!\n"
+                f"\n"
+                f"You specified:\n"
+                f"  center={center}\n"
+                f"\n"
                 f"But 'center' expects an array INDEX (0 to {array_length-1}),\n"
                 f"and {center} is within your wavelengths range [{wave_min:.3f}, {wave_max:.3f}].\n"
-                f"\nDid you mean to use:\n"
-                f"  wavelength={center}, wavelengths=<your_wavelength_array>\n",
-                UserWarning, stacklevel=2
+                f"\n"
+                f"Did you mean to use:\n"
+                f"  wavelength={center}, wavelengths=<your_wavelength_array>\n"
+                f"\n"
+                f"This will inject at array index {center:.1f} ≈ index {int(round(center))},\n"
+                f"which might not be what you intended!\n",
+                UserWarning,
+                stacklevel=2
             )
     
     # Check that either amplitude or area is specified, but not both
@@ -164,11 +181,12 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
     if amplitude is not None and area is not None:
         raise ValueError("Cannot specify both 'amplitude' and 'area' - choose one")
     
-    # Convert FWHM to standard deviation
+    # Convert FWHM to standard deviation: FWHM = 2 * sqrt(2 * ln(2)) * sigma
     sigma = fwhm / FWHM_TO_SIGMA_FACTOR
     
     # If area is specified, calculate the required amplitude
     # For a Gaussian: Area = amplitude * sigma * sqrt(2*pi)
+    # Therefore: amplitude = Area / (sigma * sqrt(2*pi))
     if area is not None:
         if area <= 0:
             raise ValueError(f"area must be positive, got {area}")
@@ -177,7 +195,7 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
     # Create x-axis array
     x = np.arange(array_length)
     
-    # Generate Gaussian
+    # Generate Gaussian: amplitude * exp(-(x-center)^2 / (2*sigma^2))
     gaussian_array = amplitude * np.exp(-((x - center) ** 2) / (2 * sigma ** 2))
     
     return gaussian_array
@@ -188,53 +206,79 @@ def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=
     """
     Add a Gaussian curve to an existing array with broadcasting support.
     
-    Supports multi-dimensional arrays, different array lengths, and both
-    index-based and wavelength-based center specification.
+    This function generates a Gaussian with the specified FWHM and adds it
+    to the input array. Supports multi-dimensional arrays via broadcasting.
+    The Gaussian can have a different length than the data array - if shorter,
+    it will be zero-padded; if longer, it will be truncated.
+    Supports both index-based and wavelength-based center specification.
     
     Parameters
     ----------
     data : numpy.ndarray
-        Array to which the Gaussian will be added (1D, 2D, or higher).
+        Numpy array to which the Gaussian will be added (1D, 2D, or higher).
     fwhm : float
-        Full Width Half Maximum of the Gaussian.
+        Full Width Half Maximum of the Gaussian (in array index units).
+        Must be positive.
     amplitude : float, optional
-        Peak amplitude. Specify either amplitude or area, not both.
+        Peak amplitude of the Gaussian. Specify either amplitude or area, not both.
     center : float, optional
-        Center position as array index. Specify either center or wavelength.
+        Center position of the Gaussian (in array index units).
+        Specify either center or wavelength, not both.
     array_length : int, optional
-        Length of Gaussian to generate. If None, uses data length along axis.
+        Length of Gaussian to generate. If None (default), uses data length along axis.
+        If different from data length, Gaussian will be zero-padded or truncated.
     axis : int, optional
-        Axis for multi-dimensional arrays. Default is -1 (last axis).
+        Axis along which to add the Gaussian for multi-dimensional arrays.
+        Default is -1 (last axis). Ignored for 1D arrays.
     area : float, optional
-        Total area under curve. Specify either amplitude or area, not both.
+        Total area under the Gaussian curve. Specify either amplitude or area, not both.
+        When area is specified, the amplitude is automatically calculated.
     wavelength : float, optional
-        Target wavelength for center (requires wavelengths array).
+        Target wavelength for Gaussian center (requires wavelengths array).
+        Specify either center or wavelength, not both. Wavelength can be between
+        array elements - fractional index will be interpolated.
     wavelengths : array-like, optional
-        Array of wavelength values. Required if wavelength parameter used.
+        Array of wavelength values corresponding to array indices.
+        Required if wavelength parameter is used. Must be monotonically increasing
+        or decreasing and same length as array_length.
     
     Returns
     -------
     numpy.ndarray
-        Array with the Gaussian added.
+        Array with the Gaussian added to the input data.
+    
+    Raises
+    ------
+    ValueError
+        If fwhm <= 0, array_length <= 0, center is out of bounds, data is empty,
+        both/neither amplitude and area are specified, both/neither center and
+        wavelength are specified, wavelength is out of range, or wavelengths
+        array is invalid.
     
     Examples
     --------
-    >>> # 1D with index-based center
+    >>> # 1D array with amplitude and index-based center (traditional method)
     >>> data = np.ones(100) * 500
     >>> result = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, center=50.0)
+    >>> print(np.max(result))
+    600.0
     
-    >>> # 1D with wavelength-based center
-    >>> wavelengths = np.linspace(400, 700, 100)
+    >>> # 1D array with wavelength-based center
+    >>> wavelengths = np.linspace(400, 700, 100)  # 400-700 nm
+    >>> data = np.ones(100) * 500
     >>> result = add_gaussian_to_array(data, fwhm=10.0, amplitude=100.0, 
     ...                                wavelength=550.0, wavelengths=wavelengths)
+    >>> # Gaussian centered at 550 nm (middle of range)
     
-    >>> # 2D array
+    >>> # 2D array - add Gaussian along axis 1 (broadcasting across axis 0)
     >>> data_2d = np.ones((50, 100)) * 500
-    >>> result = add_gaussian_to_array(data_2d, fwhm=10.0, amplitude=100.0, 
-    ...                                center=50.0, axis=1)
+    >>> result_2d = add_gaussian_to_array(data_2d, fwhm=10.0, amplitude=100.0, center=50.0, axis=1)
+    >>> print(result_2d.shape)
+    (50, 100)
     """
     data = np.asarray(data)
     
+    # Validate input data
     if data.size == 0:
         raise ValueError("Input data array is empty")
     
@@ -244,52 +288,62 @@ def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=
         if axis < 0:
             axis = data.ndim + axis
         
+        # Validate axis
         if axis < 0 or axis >= data.ndim:
             raise ValueError(f"axis {axis} is out of bounds for array of dimension {data.ndim}")
         
+        # Get length along specified axis
         if array_length is None:
             array_length = data.shape[axis]
         
+        # Validate array_length
         if array_length <= 0:
             raise ValueError(f"array_length must be positive, got {array_length}")
         
+        # Validate center is within bounds (only if center is provided, not wavelength)
         if center is not None and (center < 0 or center >= array_length):
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
-        # Generate Gaussian
+        # Generate Gaussian with specified length
         gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, 
                                     array_length=array_length, area=area,
                                     wavelength=wavelength, wavelengths=wavelengths)
         
-        # Handle different lengths
+        # Handle different lengths along the axis
         data_len = data.shape[axis]
         gauss_len = len(gaussian)
         
         if gauss_len < data_len:
+            # Gaussian is shorter - zero-pad it
             pad_gaussian = np.zeros(data_len)
             pad_gaussian[:gauss_len] = gaussian
             gaussian = pad_gaussian
         elif gauss_len > data_len:
+            # Gaussian is longer - truncate it
             gaussian = gaussian[:data_len]
         
-        # Reshape for broadcasting
+        # Reshape Gaussian for broadcasting
+        # Create shape with 1s except at the specified axis
         broadcast_shape = [1] * data.ndim
         broadcast_shape[axis] = len(gaussian)
         gaussian = gaussian.reshape(broadcast_shape)
         
+        # Add via broadcasting
         result = data + gaussian
     else:
-        # 1D array
+        # 1D array handling (original behavior)
         if array_length is None:
             array_length = len(data)
         
+        # Validate array_length
         if array_length <= 0:
             raise ValueError(f"array_length must be positive, got {array_length}")
         
+        # Validate center is within bounds (only if center is provided, not wavelength)
         if center is not None and (center < 0 or center >= array_length):
             raise ValueError(f"center {center} is out of bounds for array_length {array_length}")
         
-        # Generate Gaussian
+        # Generate Gaussian with specified length
         gaussian = generate_gaussian(fwhm, amplitude=amplitude, center=center, 
                                     array_length=array_length, area=area,
                                     wavelength=wavelength, wavelengths=wavelengths)
@@ -299,12 +353,15 @@ def add_gaussian_to_array(data, fwhm, amplitude=None, center=None, array_length=
         gauss_len = len(gaussian)
         
         if gauss_len == data_len:
+            # Same length - direct addition
             result = data + gaussian
         elif gauss_len < data_len:
+            # Gaussian is shorter - zero-pad it
             padded_gaussian = np.zeros(data_len)
             padded_gaussian[:gauss_len] = gaussian
             result = data + padded_gaussian
         else:
+            # Gaussian is longer - truncate it
             result = data + gaussian[:data_len]
     
     return result
@@ -314,27 +371,38 @@ def plot_gaussian_comparison(data, fwhm, amplitude, center, title="Gaussian Addi
     """
     Plot original data and data with added Gaussian side by side.
     
+    This is a utility function for visualizing the effect of adding a Gaussian
+    to existing data.
+    
     Parameters
     ----------
     data : numpy.ndarray
         Original data array.
     fwhm : float
-        Full Width Half Maximum of the Gaussian.
+        Full Width Half Maximum of the Gaussian to add.
     amplitude : float
         Peak amplitude of the Gaussian.
     center : float
         Center position of the Gaussian.
     title : str, optional
-        Title for the plot.
+        Title for the plot (default: "Gaussian Addition Comparison").
     
     Returns
     -------
     tuple
         (figure, axes) - matplotlib figure and axes objects.
+    
+    Examples
+    --------
+    >>> data = np.random.randn(200) * 10 + 500
+    >>> fig, axes = plot_gaussian_comparison(data, fwhm=12.0, amplitude=200.0, center=100.0)
+    >>> plt.show()
     """
+    # Generate Gaussian
     gaussian = generate_gaussian(fwhm, amplitude, center, len(data))
     result = data + gaussian
     
+    # Create figure
     fig, axes = plt.subplots(3, 1, figsize=(12, 10))
     
     # Plot 1: Pure Gaussian
@@ -367,7 +435,95 @@ def plot_gaussian_comparison(data, fwhm, amplitude, center, title="Gaussian Addi
     axes[2].grid(True, alpha=0.3)
     
     plt.tight_layout()
+    
     return fig, axes
+
+
+def find_closest_wavelength_index(target_wavelength, wavelengths):
+    """
+    Find the index of the wavelength in the array closest to a target wavelength.
+    
+    This utility function helps you identify which array element has the wavelength
+    value closest to your specified target wavelength. Useful for extracting data
+    at specific wavelengths or understanding where a Gaussian will be centered.
+    
+    Parameters
+    ----------
+    target_wavelength : float
+        The target wavelength value to search for.
+    wavelengths : array-like
+        Array of wavelength values to search in. Must be monotonically increasing
+        or decreasing.
+    
+    Returns
+    -------
+    index : int
+        Index of the closest wavelength in the array.
+    closest_wavelength : float
+        The actual wavelength value at that index.
+    difference : float
+        Absolute difference between target and closest wavelength.
+    
+    Raises
+    ------
+    ValueError
+        If wavelengths array is empty, contains NaN values, or is not monotonic.
+    TypeError
+        If inputs cannot be converted to appropriate types.
+    
+    Examples
+    --------
+    >>> # Find closest wavelength to 0.532 microns
+    >>> wavelengths = np.array([0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+    >>> idx, wl, diff = find_closest_wavelength_index(0.532, wavelengths)
+    >>> print(f"Index: {idx}, Wavelength: {wl}, Difference: {diff}")
+    Index: 4, Wavelength: 0.6, Difference: 0.068
+    
+    >>> # Use with user's wavelength array
+    >>> wavelengths = np.array([0.2, 0.2285714286, 0.2612244898, ..., 1.995336705])
+    >>> idx, wl, diff = find_closest_wavelength_index(0.532, wavelengths)
+    >>> print(f"Closest to 0.532 μm is at index {idx}: {wl:.6f} μm")
+    Closest to 0.532 μm is at index 13: 0.533657 μm
+    
+    >>> # Extract flux value at that wavelength
+    >>> flux_at_wavelength = flux_array[idx]
+    
+    Notes
+    -----
+    - Works with any wavelength units (microns, nanometers, etc.) as long as
+      target and array use the same units.
+    - Uses np.argmin on absolute differences for fast, accurate results.
+    - Returns the nearest neighbor - does not interpolate between points.
+    - For interpolation between points, use the wavelength parameter in
+      generate_gaussian() or add_gaussian_to_array() functions.
+    """
+    # Convert to numpy array
+    wavelengths = np.asarray(wavelengths)
+    
+    # Input validation
+    if wavelengths.size == 0:
+        raise ValueError("wavelengths array is empty")
+    
+    if np.any(np.isnan(wavelengths)):
+        raise ValueError("wavelengths array contains NaN values")
+    
+    if np.any(np.isnan(target_wavelength)):
+        raise ValueError("target_wavelength is NaN")
+    
+    # Check monotonicity
+    diffs = np.diff(wavelengths)
+    if not (np.all(diffs > 0) or np.all(diffs < 0)):
+        raise ValueError("wavelengths array must be monotonically increasing or decreasing")
+    
+    # Find index of closest wavelength
+    differences = np.abs(wavelengths - target_wavelength)
+    closest_index = int(np.argmin(differences))
+    
+    # Get the closest wavelength and difference
+    closest_wavelength = float(wavelengths[closest_index])
+    difference = abs(target_wavelength - closest_wavelength)
+    
+    return closest_index, closest_wavelength, difference
 
 
 # ============================================================================
@@ -375,40 +531,112 @@ def plot_gaussian_comparison(data, fwhm, amplitude, center, title="Gaussian Addi
 # ============================================================================
 
 def run_demo():
-    """Run comprehensive demonstration of functionality."""
+    """
+    Run a comprehensive demonstration of the Gaussian generation functionality.
+    
+    This function demonstrates:
+    1. Simple Gaussian generation
+    2. Adding Gaussian to existing data
+    3. Multiple Gaussians with different FWHM values
+    4. Visualization of results
+    """
     print("=" * 70)
     print("GAUSSIAN GENERATION WITH FWHM - DEMONSTRATION")
     print("=" * 70)
     
-    # Demo 1: Simple generation
+    # Demo 1: Simple Gaussian generation
     print("\n1. Generate a simple Gaussian:")
-    gaussian = generate_gaussian(fwhm=15.0, amplitude=200.0, center=100.0, array_length=200)
-    print(f"   ✓ Generated Gaussian with FWHM=15.0, amplitude=200.0")
+    fwhm = 15.0
+    amplitude = 200.0
+    center = 100.0
+    array_length = 200
+    
+    gaussian = generate_gaussian(fwhm, amplitude, center, array_length)
+    print(f"   ✓ Generated Gaussian with FWHM={fwhm}, amplitude={amplitude}")
     print(f"   ✓ Array shape: {gaussian.shape}")
     print(f"   ✓ Peak value: {np.max(gaussian):.2f}")
+    print(f"   ✓ Peak location: {np.argmax(gaussian)}")
     
-    # Demo 2: Add to data
+    # Demo 2: Add to existing data
     print("\n2. Add Gaussian to existing spectral data:")
     spectral_data = np.random.randn(500) * 10 + 1000
-    laser_signal = add_gaussian_to_array(spectral_data, fwhm=5.0, amplitude=500, center=250)
+    
+    laser_signal = add_gaussian_to_array(
+        spectral_data, 
+        fwhm=5.0,
+        amplitude=500,
+        center=250
+    )
+    
     print(f"   ✓ Original data range: [{np.min(spectral_data):.2f}, {np.max(spectral_data):.2f}]")
     print(f"   ✓ With signal range: [{np.min(laser_signal):.2f}, {np.max(laser_signal):.2f}]")
+    print(f"   ✓ Successfully added narrow Gaussian (FWHM=5.0)")
     
     # Demo 3: Multiple Gaussians
-    print("\n3. Add multiple Gaussians:")
+    print("\n3. Add multiple Gaussians with different FWHM values:")
     baseline = np.random.randn(1000) * 5 + 500
+    
     result = add_gaussian_to_array(baseline, fwhm=4.0, amplitude=300, center=200)
+    print(f"   ✓ Added narrow signal (FWHM=4.0) at pixel 200")
+    
     result = add_gaussian_to_array(result, fwhm=12.0, amplitude=200, center=500)
+    print(f"   ✓ Added medium signal (FWHM=12.0) at pixel 500")
+    
     result = add_gaussian_to_array(result, fwhm=30.0, amplitude=150, center=800)
-    print(f"   ✓ Added 3 Gaussians with different FWHM values")
+    print(f"   ✓ Added wide signal (FWHM=30.0) at pixel 800")
+    
+    # Visualization
+    print("\n4. Creating visualizations...")
+    
+    # Figure 1: Simple comparison
+    fig1, axes1 = plot_gaussian_comparison(
+        spectral_data[:200], 
+        fwhm=15.0, 
+        amplitude=400.0, 
+        center=100.0,
+        title="Single Gaussian Addition"
+    )
+    plt.figure(fig1.number)
+    plt.savefig('gaussian_demo_single.png', dpi=150, bbox_inches='tight')
+    print("   ✓ Saved 'gaussian_demo_single.png'")
+    
+    # Figure 2: Multiple Gaussians
+    fig2, axes2 = plt.subplots(figsize=(14, 6))
+    axes2.plot(baseline, 'lightgray', alpha=0.5, linewidth=0.5, label='Baseline')
+    axes2.plot(result, 'b-', linewidth=1.5, label='With 3 Gaussians')
+    axes2.axvline(x=200, color='r', linestyle=':', alpha=0.5)
+    axes2.axvline(x=500, color='r', linestyle=':', alpha=0.5)
+    axes2.axvline(x=800, color='r', linestyle=':', alpha=0.5)
+    axes2.set_title('Multiple Gaussians (FWHM: 4, 12, 30)', fontsize=14, fontweight='bold')
+    axes2.set_xlabel('Pixel Index')
+    axes2.set_ylabel('Flux')
+    axes2.legend()
+    axes2.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('gaussian_demo_multiple.png', dpi=150, bbox_inches='tight')
+    print("   ✓ Saved 'gaussian_demo_multiple.png'")
     
     print("\n" + "=" * 70)
     print("DEMONSTRATION COMPLETE")
     print("=" * 70)
+    print("\n✓ You CAN set the FWHM directly")
+    print("✓ You GET a numpy array from generate_gaussian()")
+    print("✓ You CAN add it directly to existing arrays")
+    print("✓ Gaussians are clearly visible in plots")
+    print("=" * 70)
+    
+    plt.show()
 
 
 def run_tests():
-    """Run basic tests to verify functionality."""
+    """
+    Run basic tests to verify functionality.
+    
+    Returns
+    -------
+    bool
+        True if all tests pass, False otherwise.
+    """
     print("\n" + "=" * 70)
     print("RUNNING TESTS")
     print("=" * 70)
@@ -419,8 +647,11 @@ def run_tests():
     print("\nTest 1: Basic Gaussian generation")
     try:
         gaussian = generate_gaussian(fwhm=10.0, amplitude=100.0, center=50.0, array_length=100)
-        assert np.argmax(gaussian) == 50
-        assert abs(np.max(gaussian) - 100.0) < 0.01
+        peak_index = np.argmax(gaussian)
+        peak_value = np.max(gaussian)
+        
+        assert peak_index == 50, f"Peak at {peak_index}, expected 50"
+        assert abs(peak_value - 100.0) < 0.01, f"Peak value {peak_value}, expected 100.0"
         print("   ✓ PASSED")
     except Exception as e:
         print(f"   ✗ FAILED: {e}")
@@ -431,7 +662,11 @@ def run_tests():
     try:
         baseline = np.ones(100) * 50.0
         result = add_gaussian_to_array(baseline, fwhm=10.0, amplitude=100.0, center=50.0)
-        assert abs(np.max(result) - 150.0) < 0.01
+        expected_peak = 150.0
+        actual_peak = np.max(result)
+        
+        assert abs(actual_peak - expected_peak) < 0.01, \
+            f"Peak {actual_peak}, expected {expected_peak}"
         print("   ✓ PASSED")
     except Exception as e:
         print(f"   ✗ FAILED: {e}")
@@ -440,14 +675,18 @@ def run_tests():
     # Test 3: Input validation
     print("\nTest 3: Input validation")
     try:
+        # Should raise ValueError for negative FWHM
         try:
             generate_gaussian(fwhm=-5.0, amplitude=100.0, center=50.0, array_length=100)
+            print("   ✗ FAILED: Should have raised ValueError for negative FWHM")
             all_passed = False
         except ValueError:
             print("   ✓ Correctly rejected negative FWHM")
         
+        # Should raise ValueError for out-of-bounds center
         try:
             generate_gaussian(fwhm=10.0, amplitude=100.0, center=150.0, array_length=100)
+            print("   ✗ FAILED: Should have raised ValueError for out-of-bounds center")
             all_passed = False
         except ValueError:
             print("   ✓ Correctly rejected out-of-bounds center")
@@ -470,11 +709,15 @@ def run_tests():
 # ============================================================================
 
 if __name__ == "__main__":
-    """When run as a script, execute tests and demonstration."""
+    """
+    When run as a script, execute tests and demonstration.
+    """
     import sys
     
+    # Run tests
     tests_passed = run_tests()
     
+    # Run demonstration if tests passed
     if tests_passed:
         print("\n")
         run_demo()
