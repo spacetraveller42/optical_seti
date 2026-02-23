@@ -302,16 +302,20 @@ def optimal_extraction_harps(raw_image, order_traces=None, extraction_width=5,
         raise ValueError("raw_image must be a 2D array, got shape {}".format(raw_image.shape))
 
     # --- Calibration: remove non-optical artifacts before extraction ---
+    # Work on a copy so the caller's original array is not modified.
+    if bias is not None or dark is not None or bad_pixel_mask is not None:
+        raw_image = raw_image.copy()
 
     # Subtract bias (electronic readout offset)
     if bias is not None:
-        raw_image = raw_image - np.asarray(bias, dtype=float)
+        raw_image -= np.asarray(bias, dtype=float)
 
     # Subtract dark current (thermal electrons)
     if dark is not None:
-        raw_image = raw_image - np.asarray(dark, dtype=float)
+        raw_image -= np.asarray(dark, dtype=float)
 
-    # Replace bad/hot pixels with local median so they don't corrupt extraction
+    # Replace bad/hot pixels with local median so they don't corrupt extraction.
+    # Only the flagged pixel positions are overwritten; real signal is untouched.
     if bad_pixel_mask is not None:
         bad_pixel_mask = np.asarray(bad_pixel_mask, dtype=bool)
         filtered = median_filter(raw_image, size=5)
