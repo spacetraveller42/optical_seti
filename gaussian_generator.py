@@ -148,6 +148,33 @@ def generate_gaussian(fwhm, amplitude=None, center=None, array_length=None, area
     if center < 0 or center >= array_length:
         raise ValueError(f"center must be within [0, {array_length}), got {center}")
     
+    # Warn if center looks like it might be a wavelength value instead of an index
+    # This catches the common mistake of using center=0.532 instead of wavelength=0.532
+    if center < 10 and wavelengths is not None:
+        wavelengths_arr = np.asarray(wavelengths)
+        wave_min, wave_max = np.min(wavelengths_arr), np.max(wavelengths_arr)
+        # If center value falls within wavelength range, user might be confused
+        if wave_min <= center <= wave_max:
+            import warnings
+            warnings.warn(
+                f"\n"
+                f"⚠️  WARNING: center={center} looks like a WAVELENGTH value, not an array INDEX!\n"
+                f"\n"
+                f"You specified:\n"
+                f"  center={center}\n"
+                f"\n"
+                f"But 'center' expects an array INDEX (0 to {array_length-1}),\n"
+                f"and {center} is within your wavelengths range [{wave_min:.3f}, {wave_max:.3f}].\n"
+                f"\n"
+                f"Did you mean to use:\n"
+                f"  wavelength={center}, wavelengths=<your_wavelength_array>\n"
+                f"\n"
+                f"This will inject at array index {center:.1f} ≈ index {int(round(center))},\n"
+                f"which might not be what you intended!\n",
+                UserWarning,
+                stacklevel=2
+            )
+    
     # Check that either amplitude or area is specified, but not both
     if amplitude is None and area is None:
         raise ValueError("Either 'amplitude' or 'area' must be specified")
