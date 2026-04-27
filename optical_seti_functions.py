@@ -220,3 +220,40 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     #GJ551 HITS_STARTS: 13812, 39670 (something's odd), 43403, 45101, 59377, 64514, 67948, 76729, 80165
     plt.show()
     return fwhm
+
+# Fit a Gaussian to a spectral spike and return the area under the fitted curve.
+#
+# The area under a Gaussian f(x) = A * exp(-(x-mu)^2 / (2*sigma^2)) is A * sigma * sqrt(2*pi).
+#
+# Inputs:
+#   wave: wavelength array (Angstroms)
+#   arr1: flux array
+#   hits_start: starting index of the spike
+#   hits_end:   ending index of the spike
+# Output:
+#   area: area under the fitted Gaussian (same flux units as arr1, times Angstroms)
+def gaussian_spike_area(wave, arr1, hits_start, hits_end):
+    windowpoint1 = max(hits_start - 100, 0)
+    windowpoint2 = min(hits_end + 100, len(arr1))
+    # Estimate continuum from the edges of the window, excluding the spike region,
+    # so the spike flux does not bias the continuum level.
+    edge_flux = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
+    continuum_level = np.median(edge_flux)
+    subtracted = arr1 - continuum_level
+    peak_guess = np.max(subtracted[hits_start:hits_end])
+    mean_guess = np.mean(wave[hits_start:hits_end])
+    st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
+    st_deviation_guess_narrow = (wave[hits_end] - wave[hits_start]) * 2
+    spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled,
+                          spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
+    g_init = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled,
+                               mean=mean_guess*u.AA,
+                               stddev=st_deviation_guess_wide*u.AA)
+    g_fit = fit_lines(spectrum, g_init, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
+    if g_fit.stddev.value < 1e-12:  # Fit collapsed to a delta function; retry with narrower initial guess
+        alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled,
+                                            mean=mean_guess*u.AA,
+                                            stddev=st_deviation_guess_narrow*u.AA)
+        g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
+    area = g_fit.amplitude.value * g_fit.stddev.value * np.sqrt(2 * np.pi)
+    return area
