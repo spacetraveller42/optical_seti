@@ -29,30 +29,33 @@ def read_spectrum(specfilename):
     return (specfits[1].data[0][0], specfits[1].data[0][1])
 
 # Look in FITS header to find arcfile name of raw image file associated with a given spectral file, and download it.
-def download_associated_raw(specfilename,decompress=True):
+def download_associated_raw(specfilename,decompress=True,eso=None):
     specfits = fits.open(specfilename)
-    outfilename = download_raw(specfits[0].header['PROV1'][:-5],decompress=decompress)
+    outfilename = download_raw(specfits[0].header['PROV1'][:-5],decompress=decompress,eso=eso)
     specfits.close()
     return outfilename
 
-# Download raw image file, given its "Arcfile" name.  
-# Set decompress=true to use unlzw3 module to decompress (slow)
-def download_raw(rawfilearc,decompress=True):
-    import unlzw3
-    eso = Eso()
-    eso.login(eso_login)
+# Download raw image file, given its "Arcfile" name.
+# Set decompress=True to use the system uncompress command to decompress in-place.
+# Pass an already-authenticated Eso() instance via the eso parameter to avoid repeated logins.
+def download_raw(rawfilearc,decompress=True,eso=None):
+    import subprocess
+    import os
+    if eso is None:
+        eso = Eso()
+        eso.login(eso_login)
     print("Downloading "+rawfilearc)
     rawfilename = eso.retrieve_data(rawfilearc,unzip=False)
-    print(rawfilename)
+    print(f"Downloaded: {rawfilename} ({os.path.getsize(rawfilename)} bytes)")
     if decompress:
-        # Uncompress using unlzw3
         uncompressedfilename = str(rawfilename)[:-2]
-        print("Uncompressing "+rawfilename+" to "+uncompressedfilename+"...")
-        fin = open(rawfilename,"rb")
-        fout = open(uncompressedfilename,"wb")
-        fout.write(unlzw3.unlzw(fin.read(-1)))
-        fout.close()
-        fin.close()
+        print(f"Uncompressing {rawfilename} to {uncompressedfilename}...")
+        result = subprocess.run(
+            ["uncompress", "-f", str(rawfilename)],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"uncompress failed: {result.stderr or result.stdout}")
         return uncompressedfilename
     else:
         return rawfilename
