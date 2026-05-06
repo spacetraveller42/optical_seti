@@ -99,7 +99,7 @@ def download_one_obs(star,eso):
 
 def do_search(withlogin=eso_login,withstarlist=star_list,withresults=results_list,categorize=False,predownloader_format=False):
     eso = Eso()
-    eso.login(withlogin)
+    eso.login(username=withlogin)
 
     # Get key data from the input catalog
     target_list,spectral_types,data_files,harps_objects,temperatures,distances = parse_star_list(withstarlist,predownloader_format)
@@ -155,7 +155,7 @@ def do_search(withlogin=eso_login,withstarlist=star_list,withresults=results_lis
 
 def predownload(withlogin=eso_login,withstarlist=star_list,withresults=predownload_list):
     eso = Eso()
-    eso.login(withlogin)
+    eso.login(username=withlogin)
     
     # Get key data from the input catalog
     target_list,spectral_types,data_files,harps_objects,temperatures,distances = parse_star_list(withstarlist,predownloader_format=False)
@@ -180,7 +180,7 @@ def predownload(withlogin=eso_login,withstarlist=star_list,withresults=predownlo
 
 def bulk_predownload(withlogin=eso_login,withstarlist=star_list,withresults=predownload_list,obs_per_star=1):
     eso = Eso()
-    eso.login(withlogin)
+    eso.login(username=withlogin)
 
     download_queue = []         # list of files to download
     download_queue_size = 40    # maximum number of files to queue up before starting download
@@ -210,7 +210,7 @@ def bulk_predownload(withlogin=eso_login,withstarlist=star_list,withresults=pred
             try:
                 eso.retrieve_data(download_queue)
             except:                                             # Maybe login expired, relogin and try again
-                eso.login(withlogin)
+                eso.login(username=withlogin)
                 eso.retrieve_data(download_queue)
             download_queue = []                                 # Clear download queue
     if (len(download_queue) > 0):
