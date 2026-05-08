@@ -169,6 +169,31 @@ def predownload(withlogin=eso_login,withstarlist=star_list,withresults=predownlo
         output.write("{},{},{},{},{},{}\n".format(star,spectral_type,Path(file).name,harps_object,temperature, distance))
     output.close()
 
+# unique_ordered_pairs: Given two parallel lists (same length, values correspond by index),
+# return deduplicated versions of both that maintain the original order and correspondence.
+#
+# Think of it like walking through two columns of a spreadsheet row by row.
+# We keep a "seen" notepad for list1.  For each row, if list1's value is new,
+# we add that row to our results and jot the value in the notepad.
+# If we've already seen that list1 value before, we skip the whole row.
+# Result: list1 has no repeating values, and every entry in list2 still lines
+# up with its original partner in list1 at the same index.
+#
+# Inputs:
+#   list1, list2: two equal-length lists whose values correspond by index
+# Outputs:
+#   unique1, unique2: deduplicated lists, first occurrences only, order preserved
+
+def unique_ordered_pairs(list1, list2):
+    seen = set()
+    unique1, unique2 = [], []
+    for a, b in zip(list1, list2):
+        if a not in seen:
+            seen.add(a)
+            unique1.append(a)
+            unique2.append(b)
+    return unique1, unique2
+
 # bulk_predownloader: Predownload one or more spectra from each of the stars in the catalog.
 #   Group up files to download to reduce the number of requests we make to ESO servers.
 #
