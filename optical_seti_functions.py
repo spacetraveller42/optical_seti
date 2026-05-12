@@ -201,9 +201,7 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     windowpoint1 = hits_start - 100
     windowpoint2 = hits_end + 100
     continuum_regions = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
-    # Use median instead of mean so that outlier pixels in the flanking continuum
-    # don't bias the baseline level upward.
-    subtracted = arr1 - np.median(continuum_regions)
+    subtracted = arr1 - np.mean(continuum_regions)
     peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
     # Use the wavelength of the actual flux maximum rather than the mean wavelength
     # of the spike window, so the optimizer starts at the correct peak location.
