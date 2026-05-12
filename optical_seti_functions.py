@@ -198,7 +198,8 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     wave,arr1 = read_harps_file(file)
     windowpoint1 = hits_start - 100
     windowpoint2 = hits_end + 100
-    subtracted = arr1 - np.mean(arr1[windowpoint1:windowpoint2])
+    continuum_region = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
+    subtracted = arr1 - np.mean(continuum_region)
     peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
     mean_guess = np.mean(wave[hits_start:hits_end])
     st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
