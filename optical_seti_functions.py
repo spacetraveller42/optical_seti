@@ -32,6 +32,8 @@ from pathlib import Path
 eso_cache_path = Path(astropy.config.get_cache_dir()) / "astroquery" / "Eso"
 
 _FWHM_FACTOR = 2 * np.sqrt(2 * np.log(2))  # ≈ 2.3548; exact conversion between sigma and FWHM
+_MIN_FIT_MARGIN_PIXELS = 30  # minimum pixels on each side of the spike used for the Gaussian fit
+_COLLAPSED_STDDEV_THRESHOLD = 1e-12  # stddev below this is treated as a numerically collapsed fit
 
 # ##### 1.  STATISTICS FUNCTIONS
 
@@ -200,9 +202,17 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     wave,arr1 = read_harps_file(file)
     windowpoint1 = hits_start - 100
     windowpoint2 = hits_end + 100
-    continuum_regions = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
-    subtracted = arr1 - np.mean(continuum_regions)
+    # Fit a linear baseline through the two flanking continuum regions so that
+    # a sloped stellar continuum doesn't bias the amplitude or width measurement.
+    continuum_wave = np.concatenate([wave[windowpoint1:hits_start], wave[hits_end:windowpoint2]])
+    continuum_flux = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
+    slope, intercept = np.polyfit(continuum_wave, continuum_flux, 1)
+    subtracted = arr1 - (slope * wave + intercept)
     peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
+    if peak_guess <= 0:
+        # Linear baseline overcorrected or there is no real emission spike; bail out.
+        print("gaussian_curve_fit: no positive peak after baseline subtraction, skipping fit")
+        return 0.0
     # Use the wavelength of the actual flux maximum rather than the mean wavelength
     # of the spike window, so the optimizer starts at the correct peak location.
     mean_guess = wave[hits_start + np.argmax(subtracted[hits_start:hits_end])]
@@ -211,24 +221,35 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     # guess is physically motivated rather than arbitrarily scaled.
     st_deviation_guess_wide = spike_width / _FWHM_FACTOR
     st_deviation_guess_narrow = st_deviation_guess_wide / 2
-    spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
+    # Fit over a tight window around the spike (≈ 3× spike width on each side,
+    # min 30 pixels) so that other spectral features in the ±100-pixel context
+    # window don't pull the optimizer away from the spike.
+    fit_margin = max(3 * (hits_end - hits_start), _MIN_FIT_MARGIN_PIXELS)
+    fit_windowpoint1 = max(hits_start - fit_margin, windowpoint1)
+    fit_windowpoint2 = min(hits_end + fit_margin, windowpoint2)
+    spectrum = Spectrum1D(flux=subtracted[fit_windowpoint1:fit_windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[fit_windowpoint1:fit_windowpoint2]*u.AA)
     g_init = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_wide*u.AA)
-    g_fit = fit_lines(spectrum, g_init, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
-    standard_deviation = g_fit.stddev.value
+    g_fit = fit_lines(spectrum, g_init, window=(wave[fit_windowpoint1]*u.AA, wave[fit_windowpoint2]*u.AA))
+    # abs() guards against unconstrained fits that return a negative sigma, which
+    # is mathematically equivalent but would produce a negative FWHM otherwise.
+    standard_deviation = abs(g_fit.stddev.value)
     fitted_mean = g_fit.mean.value
     fitted_amplitude = g_fit.amplitude.value
     # Retry with a narrower initial guess if the fit collapsed (stddev ~ 0),
     # the peak wandered outside the spike window, or the amplitude went negative.
-    if (standard_deviation < 1e-12
+    if (standard_deviation < _COLLAPSED_STDDEV_THRESHOLD
             or fitted_mean < wave[hits_start] or fitted_mean > wave[hits_end]
             or fitted_amplitude <= 0):
         alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
-        g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
-        standard_deviation= g_fit.stddev.value
+        g_fit = fit_lines(spectrum, alternate_guess, window=(wave[fit_windowpoint1]*u.AA, wave[fit_windowpoint2]*u.AA))
+        standard_deviation = abs(g_fit.stddev.value)
     # Use exact FWHM conversion factor 2*sqrt(2*ln2) instead of the rounded 2.35.
     fwhm = standard_deviation * _FWHM_FACTOR
+    # Plot the full ±100-pixel context window for visual inspection, even though
+    # the fit was computed over the tighter window.
     y_fit = g_fit(wave[windowpoint1:windowpoint2]*u.AA)
-    plt.plot(spectrum.spectral_axis, spectrum.flux) 
+    full_spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
+    plt.plot(full_spectrum.spectral_axis, full_spectrum.flux) 
     plt.plot(wave[windowpoint1:windowpoint2], y_fit)
     print(fwhm) 
     #Cosmic ray hits_start: 4082, green auroral emission line: 179487, 179487
