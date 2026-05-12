@@ -20,7 +20,8 @@ from optical_seti_functions import doppler, find_closest_index_numpy
 
 # ── Load search list ──────────────────────────────────────────────────────────
 search_file = "/Users/blfields/Desktop/LaserInjector/thebigsearchstage2.txt"
-rows = [line.strip() for line in open(search_file).readlines()]
+with open(search_file) as f:
+    rows = [line.strip() for line in f.readlines()]
 
 stars          = [x.split(',')[0] for x in rows]
 spectral_types = [x.split(',')[1] for x in rows]
@@ -30,12 +31,15 @@ lambends       = [x.split(',')[6] for x in rows]
 
 # ── Load airglow reference table ──────────────────────────────────────────────
 airglow_file = "/Users/blfields/Desktop/LaserInjector/airglow_table_comma_delimited.txt"
-airglow_rows = [line.strip() for line in open(airglow_file).readlines()]
+with open(airglow_file) as f:
+    airglow_rows = [line.strip() for line in f.readlines()]
 
 airglow_lines = np.array([x.split(',')[2] for x in airglow_rows]).astype(float)
 airglow_fwhm  = np.array([x.split(',')[3] for x in airglow_rows]).astype(float)
 
 # ── Per-star airglow check ────────────────────────────────────────────────────
+# A candidate wavelength is flagged as airglow if it falls within
+# filter_multiplier * FWHM of a known airglow line.
 filter_multiplier = 1000
 
 # Initialise BEFORE the loop so hits accumulate across all stars.
