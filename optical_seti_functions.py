@@ -31,6 +31,8 @@ from specutils.fitting import fit_lines
 from pathlib import Path
 eso_cache_path = Path(astropy.config.get_cache_dir()) / "astroquery" / "Eso"
 
+_FWHM_FACTOR = 2 * np.sqrt(2 * np.log(2))  # ≈ 2.3548; exact conversion between sigma and FWHM
+
 # ##### 1.  STATISTICS FUNCTIONS
 
 # Calculate running median of data, using window size.
@@ -199,20 +201,34 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     windowpoint1 = hits_start - 100
     windowpoint2 = hits_end + 100
     continuum_regions = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
-    subtracted = arr1 - np.mean(continuum_regions)
+    # Use median instead of mean so that outlier pixels in the flanking continuum
+    # don't bias the baseline level upward.
+    subtracted = arr1 - np.median(continuum_regions)
     peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
-    mean_guess = np.mean(wave[hits_start:hits_end])
-    st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
-    st_deviation_guess_narrow = (wave[hits_end] - wave[hits_start]) * 2
+    # Use the wavelength of the actual flux maximum rather than the mean wavelength
+    # of the spike window, so the optimizer starts at the correct peak location.
+    mean_guess = wave[hits_start + np.argmax(subtracted[hits_start:hits_end])]
+    spike_width = wave[hits_end] - wave[hits_start]
+    # Derive sigma from the spike width (spike width ≈ FWHM), so the initial
+    # guess is physically motivated rather than arbitrarily scaled.
+    st_deviation_guess_wide = spike_width / _FWHM_FACTOR
+    st_deviation_guess_narrow = st_deviation_guess_wide / 2
     spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
     g_init = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_wide*u.AA)
     g_fit = fit_lines(spectrum, g_init, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
     standard_deviation = g_fit.stddev.value
-    if standard_deviation < 1e-12: # Didn't find peak, try a narrower guess
+    fitted_mean = g_fit.mean.value
+    fitted_amplitude = g_fit.amplitude.value
+    # Retry with a narrower initial guess if the fit collapsed (stddev ~ 0),
+    # the peak wandered outside the spike window, or the amplitude went negative.
+    if (standard_deviation < 1e-12
+            or fitted_mean < wave[hits_start] or fitted_mean > wave[hits_end]
+            or fitted_amplitude <= 0):
         alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
         g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
         standard_deviation= g_fit.stddev.value
-    fwhm = standard_deviation * 2.35
+    # Use exact FWHM conversion factor 2*sqrt(2*ln2) instead of the rounded 2.35.
+    fwhm = standard_deviation * _FWHM_FACTOR
     y_fit = g_fit(wave[windowpoint1:windowpoint2]*u.AA)
     plt.plot(spectrum.spectral_axis, spectrum.flux) 
     plt.plot(wave[windowpoint1:windowpoint2], y_fit)
