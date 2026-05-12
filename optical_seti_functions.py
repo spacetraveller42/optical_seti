@@ -31,6 +31,9 @@ from specutils.fitting import fit_lines
 from pathlib import Path
 eso_cache_path = Path(astropy.config.get_cache_dir()) / "astroquery" / "Eso"
 
+# Speed of light in km/s
+_SPEED_OF_LIGHT_KM_S = 299792.458
+
 # ##### 1.  STATISTICS FUNCTIONS
 
 # Calculate running median of data, using window size.
@@ -92,7 +95,31 @@ def running_standarddev_old(arr1, stwindow):
         running_stdeviation.append(np.std(fluxes[start:end])) 
     return(running_stdeviation)
 
-# ##### 2.  FILE LOADING
+# ##### 2.  WAVELENGTH UTILITIES
+
+# Apply a Doppler shift to a wavelength given a radial velocity.
+# Input arguments:
+#   wavelength: rest-frame wavelength (any unit, e.g. Angstroms or nm)
+#   velocity_km_s: radial velocity in km/s (positive = receding, negative = approaching)
+#                  For HARPS, pass the BERV (Barycentric Earth Radial Velocity) to
+#                  convert from the stellar/barycentric frame to the observer frame.
+# Output arguments:
+#   shifted wavelength in the same units as the input wavelength
+
+def doppler(wavelength, velocity_km_s):
+    return wavelength * (1.0 + velocity_km_s / _SPEED_OF_LIGHT_KM_S)
+
+# Find the index of the element in array that is closest to value.
+# Input arguments:
+#   value: target value
+#   array: 1-D numpy array to search
+# Output arguments:
+#   index of the closest element
+
+def find_closest_index_numpy(value, array):
+    return np.argmin(np.abs(np.asarray(array) - value))
+
+# ##### 3.  FILE LOADING
 
 # Read a HARPS data file.
 # Input arguments:
@@ -115,7 +142,7 @@ def read_harps_file(file):
         arr1 = spectral_data[0][1]
     return wave, arr1
 
-# ##### 3.  SEARCH ALGORITHM
+# ##### 4.  SEARCH ALGORITHM
 
 # The main optical seti search routine.  Identifies spikes that rise more than
 # threshold_multiplier times the local standard deviation above the local median.
@@ -158,7 +185,7 @@ def seti_spike_analyzer(arr1, min_count = 4, max_count = 8, threshold_multiplier
     print(hits_start, hits_end)
     return hits_start, hits_end, count                                 # Return list of hits found, and length of last hit
 
-# ##### 4.  PLOTTING
+# ##### 5.  PLOTTING
 
 # Plot spectral data between index1 and index2.
 def original_spectrum_plot(wave, arr1, index1, index2):
