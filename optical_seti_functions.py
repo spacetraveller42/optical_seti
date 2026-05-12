@@ -188,35 +188,40 @@ def spike_plotter(file, window_size = 101, threshold_multiplier = 3.5, center_in
     plt.plot(x, arr1[start_index:end_index],'.-', x, continuum[(start_index - 50):(end_index - 50)], x, threshold[(start_index - 50):(end_index - 50)])
     plt.savefig(str(file[48:]) + "zoom_in" + ".png")
 
-# Fit a Gaussian curve to a spectral line found at hits_start to hits_end, plot both, return the width of the Gaussian fit.
+# Fit a Gaussian curve to spectral lines found at each (hits_start, hits_end) pair, plot both, and return the list of FWHM values.
 #
 # Inputs:
-#   file: file name to fit
-#   hits_start: starting index of best-guess peak location
-#   hits_end: ending index of best-guess peak location
-def gaussian_curve_fit(file,hits_start,hits_end):
-    wave,arr1 = read_harps_file(file)
-    windowpoint1 = hits_start - 100
-    windowpoint2 = hits_end + 100
-    subtracted = arr1 - np.mean(arr1[windowpoint1:windowpoint2])
-    peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
-    mean_guess = np.mean(wave[hits_start:hits_end])
-    st_deviation_guess_wide = (wave[hits_end] - wave[hits_start]) * 10
-    st_deviation_guess_narrow = (wave[hits_end] - wave[hits_start]) * 2
-    spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
-    g_init = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_wide*u.AA)
-    g_fit = fit_lines(spectrum, g_init, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
-    standard_deviation = g_fit.stddev.value
-    if standard_deviation < 1e-12: # Didn't find peak, try a narrower guess
-        alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
-        g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
-        standard_deviation= g_fit.stddev.value
-    fwhm = standard_deviation * 2.35
-    y_fit = g_fit(wave[windowpoint1:windowpoint2]*u.AA)
-    plt.plot(spectrum.spectral_axis, spectrum.flux) 
-    plt.plot(wave[windowpoint1:windowpoint2], y_fit)
-    print(fwhm) 
-    #Cosmic ray hits_start: 4082, green auroral emission line: 179487, 179487
-    #GJ551 HITS_STARTS: 13812, 39670 (something's odd), 43403, 45101, 59377, 64514, 67948, 76729, 80165
-    plt.show()
-    return fwhm
+#   wave: wavelength array (Angstroms)
+#   arr1: spectral flux array
+#   hits_start: list of starting indices of best-guess peak locations (as returned by seti_spike_analyzer)
+#   hits_end: list of ending indices of best-guess peak locations (as returned by seti_spike_analyzer)
+def gaussian_curve_fit(wave, arr1, hits_start, hits_end, plot=True):
+    fwhm_list = []
+    for start, end in zip(hits_start, hits_end):
+        windowpoint1 = max(start - 100, 0)
+        windowpoint2 = min(end + 100, len(arr1) - 1)
+        subtracted = arr1 - np.mean(arr1[windowpoint1:windowpoint2])
+        peak_guess = np.max(subtracted[start:end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
+        mean_guess = np.mean(wave[start:end])
+        st_deviation_guess_wide = (wave[end] - wave[start]) * 10
+        st_deviation_guess_narrow = (wave[end] - wave[start]) * 2
+        spectrum = Spectrum1D(flux=subtracted[windowpoint1:windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[windowpoint1:windowpoint2]*u.AA)
+        g_init = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_wide*u.AA)
+        g_fit = fit_lines(spectrum, g_init, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
+        standard_deviation = g_fit.stddev.value
+        if standard_deviation < 1e-12: # Didn't find peak, try a narrower guess
+            alternate_guess = models.Gaussian1D(amplitude=peak_guess*u.dimensionless_unscaled, mean=mean_guess*u.AA, stddev=st_deviation_guess_narrow*u.AA)
+            g_fit = fit_lines(spectrum, alternate_guess, window=(wave[windowpoint1]*u.AA, wave[windowpoint2]*u.AA))
+            standard_deviation = g_fit.stddev.value
+        fwhm = standard_deviation * 2.35
+        y_fit = g_fit(wave[windowpoint1:windowpoint2]*u.AA)
+        plt.plot(spectrum.spectral_axis, spectrum.flux)
+        plt.plot(wave[windowpoint1:windowpoint2], y_fit)
+        print(fwhm)
+        #Cosmic ray hits_start: 4082, green auroral emission line: 179487, 179487
+        #GJ551 HITS_STARTS: 13812, 39670 (something's odd), 43403, 45101, 59377, 64514, 67948, 76729, 80165
+        if plot:
+            plt.plot(spectrum.spectral_axis, spectrum.flux)
+            plt.plot(wave[windowpoint1:windowpoint2], y_fit)
+            plt.show()
+    return fwhm_list
