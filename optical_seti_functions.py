@@ -204,27 +204,35 @@ def gaussian_curve_fit(file,hits_start,hits_end):
     windowpoint2 = hits_end + 100
     # Fit a linear baseline through the two flanking continuum regions so that
     # a sloped stellar continuum doesn't bias the amplitude or width measurement.
+    # Fall back to a constant mean if either flanking region is too short to
+    # constrain a line (e.g. spike is near the edge of the array).
     continuum_wave = np.concatenate([wave[windowpoint1:hits_start], wave[hits_end:windowpoint2]])
     continuum_flux = np.concatenate([arr1[windowpoint1:hits_start], arr1[hits_end:windowpoint2]])
-    slope, intercept = np.polyfit(continuum_wave, continuum_flux, 1)
-    subtracted = arr1 - (slope * wave + intercept)
+    left_count = hits_start - windowpoint1
+    right_count = windowpoint2 - hits_end
+    if left_count >= 2 and right_count >= 2:
+        slope, intercept = np.polyfit(continuum_wave, continuum_flux, 1)
+        subtracted = arr1 - (slope * wave + intercept)
+    else:
+        subtracted = arr1 - np.mean(continuum_flux)
     peak_guess = np.max(subtracted[hits_start:hits_end]) #makes a highly "educated guess" for the fitted curve's peak by taking the actual maximum from the subtracted continuum
     if peak_guess <= 0:
         # Linear baseline overcorrected or there is no real emission spike; bail out.
         print("gaussian_curve_fit: no positive peak after baseline subtraction, skipping fit")
         return 0.0
-    # Use the wavelength of the actual flux maximum rather than the mean wavelength
-    # of the spike window, so the optimizer starts at the correct peak location.
+    # The peak_guess > 0 guard above ensures at least one element in this range
+    # is positive, so argmax correctly locates the emission peak.
     mean_guess = wave[hits_start + np.argmax(subtracted[hits_start:hits_end])]
     spike_width = wave[hits_end] - wave[hits_start]
     # Derive sigma from the spike width (spike width ≈ FWHM), so the initial
     # guess is physically motivated rather than arbitrarily scaled.
     st_deviation_guess_wide = spike_width / _FWHM_FACTOR
     st_deviation_guess_narrow = st_deviation_guess_wide / 2
-    # Fit over a tight window around the spike (≈ 3× spike width on each side,
-    # min 30 pixels) so that other spectral features in the ±100-pixel context
-    # window don't pull the optimizer away from the spike.
-    fit_margin = max(3 * (hits_end - hits_start), _MIN_FIT_MARGIN_PIXELS)
+    # Fit over a tight window around the spike (≈ 1.5× spike width on each side,
+    # min _MIN_FIT_MARGIN_PIXELS) so that other spectral features in the ±100-pixel
+    # context window don't pull the optimizer away from the spike.
+    spike_pixels = hits_end - hits_start
+    fit_margin = max(3 * spike_pixels // 2, _MIN_FIT_MARGIN_PIXELS)
     fit_windowpoint1 = max(hits_start - fit_margin, windowpoint1)
     fit_windowpoint2 = min(hits_end + fit_margin, windowpoint2)
     spectrum = Spectrum1D(flux=subtracted[fit_windowpoint1:fit_windowpoint2]*u.dimensionless_unscaled, spectral_axis=wave[fit_windowpoint1:fit_windowpoint2]*u.AA)
