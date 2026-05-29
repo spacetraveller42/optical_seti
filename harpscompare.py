@@ -56,26 +56,31 @@ def download_associated_raw(specfilename,decompress=True):
 def download_raw(rawfilearc, decompress=True):
     eso = get_eso()
     print("Downloading " + rawfilearc)
-    rawfilename = eso.retrieve_data(rawfilearc, unzip=False)
+    result = eso.retrieve_data(rawfilearc, unzip=False)
+
+    # retrieve_data always returns a list; extract the single path.
+    if not result:
+        raise RuntimeError(f"Download failed for {rawfilearc}: retrieve_data returned an empty list")
+    rawfilename = Path(result[0])
 
     if decompress:
-        uncompressedfilename = str(rawfilename)[:-2]
+        uncompressedfilename = rawfilename.with_suffix("")  # strip the trailing .Z
         # If the .Z file is gone but the decompressed file already exists (e.g. from
         # a previous run), skip decompression and return the existing file.
-        if not os.path.exists(rawfilename) and os.path.exists(uncompressedfilename):
+        if not rawfilename.exists() and uncompressedfilename.exists():
             print(f"Already decompressed: {uncompressedfilename}")
-            return uncompressedfilename
-        print(f"Downloaded: {rawfilename} ({os.path.getsize(rawfilename)} bytes)")
+            return str(uncompressedfilename)
+        print(f"Downloaded: {rawfilename} ({rawfilename.stat().st_size} bytes)")
         print(f"Uncompressing {rawfilename} to {uncompressedfilename}...")
-        result = subprocess.run(
+        proc = subprocess.run(
             ["uncompress", "-f", str(rawfilename)],
             capture_output=True, text=True
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"uncompress failed for {rawfilename}: {result.stderr}")
-        return uncompressedfilename
+        if proc.returncode != 0:
+            raise RuntimeError(f"uncompress failed for {rawfilename}: {proc.stderr}")
+        return str(uncompressedfilename)
     else:
-        return rawfilename
+        return str(rawfilename)
 
 # Read spectral layout information (location of spectral orders on CCD chip and what wavelengths they correspond to)
 # Column indices in harps_spectralpositioning.txt: 1=mid wavelength, 2=y pixel location,
