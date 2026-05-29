@@ -48,10 +48,15 @@ def download_raw(rawfilearc, decompress=True):
     eso.login(username=eso_login)
     print("Downloading " + rawfilearc)
     rawfilename = eso.retrieve_data(rawfilearc, unzip=False)
-    print(f"Downloaded: {rawfilename} ({os.path.getsize(rawfilename)} bytes)")
 
     if decompress:
         uncompressedfilename = str(rawfilename)[:-2]
+        # If the .Z file is gone but the decompressed file already exists (e.g. from
+        # a previous run), skip decompression and return the existing file.
+        if not os.path.exists(rawfilename) and os.path.exists(uncompressedfilename):
+            print(f"Already decompressed: {uncompressedfilename}")
+            return uncompressedfilename
+        print(f"Downloaded: {rawfilename} ({os.path.getsize(rawfilename)} bytes)")
         print(f"Uncompressing {rawfilename} to {uncompressedfilename}...")
         result = subprocess.run(
             ["uncompress", "-f", str(rawfilename)],
