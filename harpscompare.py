@@ -164,7 +164,13 @@ def compare_spec_to_raw(specfilename,rawfilename,lamb,lamb_range = [],
             lam_start = doppler(lam_start,-berv)
             lam_end = doppler(lam_end,-berv)
             lam_mid = doppler(lam_mid,-berv)
-        im = rawfits[ccd].data
+        if len(rawfits)<2:  # 2003 FITS files are in a different format
+            if ccd==1:
+                im = rawfits[0].data[:,0:2148]
+            else:
+                im = rawfits[0].data[:,2149:]
+        else:
+            im = rawfits[ccd].data
         rows,cols = im.shape
         if (raw_countmin==-1):
             # Set image color scale limits based on percentiles.
